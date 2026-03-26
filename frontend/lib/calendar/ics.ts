@@ -33,7 +33,7 @@ function foldLine(line: string): string {
 }
 
 function uidFor(c: DeadlineCandidate): string {
-  return `${c.id}@panicbutton.local`;
+  return `${c.id}@cueforth.local`;
 }
 
 function isValidISODate(dateISO: string): boolean {
@@ -53,7 +53,7 @@ export function buildICS(candidates: DeadlineCandidate[]): string {
   const lines: string[] = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
-  lines.push("PRODID:-//PanicButton//Syllabus Deadlines//EN");
+  lines.push("PRODID:-//Cueforth//PanicButton Deadlines//EN");
   lines.push("CALSCALE:GREGORIAN");
   lines.push("METHOD:PUBLISH");
 
@@ -128,4 +128,3 @@ export function downloadICS(filename: string, icsContent: string) {
 
   URL.revokeObjectURL(url);
 }
-

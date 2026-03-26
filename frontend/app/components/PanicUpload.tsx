@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { parsePDF } from "@/lib/parser/pdfParser";
+import { buildICS, downloadICS } from "@/lib/calendar/ics";
 import { extractDeadlines } from "@/lib/extract/extractor";
 import type { DeadlineCandidate } from "@/lib/extract/models";
 import { Inspector } from "./Inspector";
@@ -102,6 +103,11 @@ export default function PanicUpload() {
     return mergedCandidates.find((c) => c.id === selectedId) ?? null;
   }, [mergedCandidates, selectedId]);
 
+  const exportableCandidates = useMemo(
+    () => displayCandidates.filter((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.dateISO) && c.confidence >= 0),
+    [displayCandidates]
+  );
+
   function updateCandidate(id: string, patch: Partial<DeadlineCandidate>) {
     setManualEdits((prev) => ({
       ...prev,
@@ -144,13 +150,16 @@ export default function PanicUpload() {
     if (selectedId === id) setSelectedId(null);
   }
 
+  function exportICS() {
+    if (exportableCandidates.length === 0) return;
+    const icsContent = buildICS(exportableCandidates);
+    downloadICS("cueforth-deadlines.ics", icsContent);
+  }
+
   function exportCSV() {
-    const exportables = displayCandidates.filter(
-      (c) => /^\d{4}-\d{2}-\d{2}$/.test(c.dateISO) && c.confidence >= 0
-    );
     const lines = [
       ["title", "type", "dateISO", "time24h", "confidence"].join(","),
-      ...exportables.map((c) =>
+      ...exportableCandidates.map((c) =>
         [
           c.title ?? "",
           c.type,
@@ -167,7 +176,7 @@ export default function PanicUpload() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "panicbutton-deadlines.csv";
+    a.download = "cueforth-deadlines.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -182,76 +191,119 @@ export default function PanicUpload() {
       }}
     >
       <div
-        className="flex items-center justify-between p-6"
+        className="flex flex-wrap items-start justify-between gap-4 p-6"
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: 16,
           justifyContent: "space-between",
           padding: "20px 24px",
         }}
       >
-        <div className="flex items-center gap-3" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="min-w-[280px] flex-1" style={{ flex: "1 1 280px", minWidth: 280 }}>
+          <div
+            className="text-xs uppercase tracking-[0.22em] text-zinc-500"
+            style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.22em", textTransform: "uppercase" }}
+          >
+            Cueforth
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-zinc-100" style={{ marginTop: 8, color: "#f3f4f6", fontSize: 28, fontWeight: 600 }}>
+            PanicButton
+          </div>
+          <div className="mt-1 text-sm text-zinc-400" style={{ marginTop: 4, color: "#9ca3af", fontSize: 14 }}>
+            Syllabus intake and deadline review
+          </div>
+
+          <div
+            className="mt-5 flex flex-wrap items-center gap-3"
+            style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 20 }}
+          >
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-lg font-semibold text-white transition-colors hover:bg-blue-400"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                borderRadius: 12,
+                border: "none",
+                background: "#3b82f6",
+                color: "#ffffff",
+                padding: "10px 18px",
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <Upload className="h-5 w-5" />
+              Upload PDF
+            </button>
+
+            {rawText && (
+              <button
+                onClick={addManualDeadline}
+                className="rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-200 transition-colors hover:bg-zinc-800"
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #374151",
+                  background: "transparent",
+                  color: "#d1d5db",
+                  padding: "12px 16px",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                + Manual
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="flex items-center gap-3"
+          style={{ display: "flex", alignItems: "center", gap: 12 }}
+        >
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-6 py-3 text-lg font-semibold text-white transition-colors hover:bg-blue-400"
+            onClick={exportCSV}
+            disabled={exportableCandidates.length === 0}
+            className="rounded-xl border border-zinc-700 bg-transparent px-4 py-3 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-600"
+            style={{
+              borderRadius: 12,
+              border: "1px solid #374151",
+              background: "transparent",
+              color: exportableCandidates.length === 0 ? "#4b5563" : "#d1d5db",
+              padding: "10px 16px",
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: exportableCandidates.length === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            CSV
+          </button>
+
+          <button
+            onClick={exportICS}
+            disabled={exportableCandidates.length === 0}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-transparent px-6 py-3 text-lg font-semibold text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-600"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 10,
-              borderRadius: 12,
-              border: "none",
-              background: "#3b82f6",
-              color: "#ffffff",
+              borderRadius: 14,
+              border: "1px solid #374151",
+              background: "transparent",
+              color: exportableCandidates.length === 0 ? "#4b5563" : "#e5e7eb",
               padding: "10px 18px",
               fontSize: 16,
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: exportableCandidates.length === 0 ? "not-allowed" : "pointer",
             }}
           >
-            <Upload className="h-5 w-5" />
-            Upload PDF
+            <Download className="h-5 w-5" />
+            Export .ics
           </button>
-
-          {rawText && (
-            <button
-              onClick={addManualDeadline}
-              className="rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-200 transition-colors hover:bg-zinc-800"
-              style={{
-                borderRadius: 12,
-                border: "1px solid #374151",
-                background: "transparent",
-                color: "#d1d5db",
-                padding: "12px 16px",
-                fontSize: 14,
-                cursor: "pointer",
-              }}
-            >
-              + Manual
-            </button>
-          )}
         </div>
-
-        <button
-          onClick={exportCSV}
-          disabled={displayCandidates.length === 0}
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-transparent px-6 py-3 text-lg font-semibold text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:text-zinc-600"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            borderRadius: 14,
-            border: "1px solid #374151",
-            background: "transparent",
-            color: displayCandidates.length === 0 ? "#4b5563" : "#e5e7eb",
-            padding: "10px 18px",
-            fontSize: 16,
-            fontWeight: 600,
-            cursor: displayCandidates.length === 0 ? "not-allowed" : "pointer",
-          }}
-        >
-          <Download className="h-5 w-5" />
-          Export to CSV
-        </button>
       </div>
 
       <input
@@ -279,8 +331,23 @@ export default function PanicUpload() {
               textAlign: "center",
             }}
           >
+            <div
+              className="mb-4 rounded-full border border-zinc-700 px-4 py-1 text-xs uppercase tracking-[0.24em] text-zinc-400"
+              style={{
+                marginBottom: 16,
+                borderRadius: 9999,
+                border: "1px solid #374151",
+                color: "#9ca3af",
+                padding: "6px 14px",
+                fontSize: 12,
+                letterSpacing: "0.24em",
+                textTransform: "uppercase",
+              }}
+            >
+              By Cueforth
+            </div>
             <h2 className="text-6xl font-bold text-zinc-100" style={{ color: "#e5e7eb", fontSize: 72, fontWeight: 700 }}>
-              Panic Button
+              PanicButton
             </h2>
             <p
               style={{
@@ -291,7 +358,7 @@ export default function PanicUpload() {
                 lineHeight: 1.45,
               }}
             >
-              Upload your syllabus and we will quietly surface likely deadlines for review.
+              Turn a syllabus into reviewable deadlines with PanicButton.
               You stay in control before exporting anything.
             </p>
             {(loading || status) && (

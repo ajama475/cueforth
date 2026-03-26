@@ -8,8 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PanicButton",
-  description: "Upload a syllabus PDF → extract deadlines → export to calendar.",
+  title: "Cueforth",
+  description: "Cueforth helps students turn course chaos into a plan. PanicButton turns syllabi into reviewable deadlines.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

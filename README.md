@@ -1,14 +1,23 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-# PanicButton
+# Cueforth
 
-**Find your deadlines from a syllabus — fast.**
+**Turn course chaos into a plan.**
 
-PanicButton is a simple tool for University students who are tired of digging through multiple 10-page syllabuses just to figure out what’s due next week. Upload your syllabus PDF and get a clean, reviewable list of deadlines you can export straight to your calendar.
+Cueforth is a broader student planning platform built to turn scattered course information into clear next actions.
+
+Its flagship workflow, **PanicButton**, helps students upload a syllabus, review likely deadlines, and export them to a calendar without digging through multiple long PDFs by hand.
 
 ---
 
-## Try It Live
+## Current Preview URL
 👉 https://panicbutton-app.vercel.app
+
+---
+
+## Brand Structure
+
+- **Brand:** Cueforth
+- **Flagship workflow:** PanicButton
 
 ---
 
@@ -20,4 +29,4 @@ Check out the full documentation:
 
 ---
 
-Built to make academic panic a little less painful.
+Built to help students find what matters next.

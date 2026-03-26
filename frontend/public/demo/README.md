@@ -1,6 +1,6 @@
 # Demo Syllabi
 
-These files represent real-world syllabus variations for testing PanicButton.
+These files represent real-world syllabus variations for testing Cueforth's PanicButton workflow.
 
 ## `syllabus-clean.pdf`
 - **Type:** "Golden path" — well-structured, digital-native PDF
@@ -22,5 +22,5 @@ These files represent real-world syllabus variations for testing PanicButton.
 
 ## Usage
 - Development: Use for parser testing and validation
-- Demonstration: Show how PanicButton handles different real-world documents
+- Demonstration: Show how Cueforth's PanicButton workflow handles different real-world documents
 - Evaluation: Measure accuracy improvements across document types

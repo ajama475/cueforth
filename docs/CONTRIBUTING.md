@@ -1,15 +1,17 @@
-# Vision Document: PanicButton
-## Emergency Clarity for Academic Panic Moments
+# Vision Document: Cueforth
+## PanicButton As The Flagship Workflow
 
 
 
 ## 1. Executive Summary
 
-PanicButton is a student-created academic clarity tool for times of extreme anxiety when deadlines feel buried, knowledge is fragmented, and time is limited.
+Cueforth is a student-centered platform for turning scattered academic information into clear next actions.
 
-PanicButton is more of a document-to-structure pipeline than a planner, learning management system, or institutional authority. It converts unstructured academic documents (such as syllabus PDFs) into transparent, reviewable deadlines, allowing students to restore orientation and control swiftly.
+Its first flagship workflow, *PanicButton*, is designed for moments of acute uncertainty when deadlines feel buried, knowledge is fragmented, and time is limited.
 
-The name *PanicButton* reflects the moment of use, not the outcome. The system’s purpose is rapid de-escalation through clarity.
+Cueforth is more of a document-to-structure and review platform than a planner, learning management system, or institutional authority. PanicButton converts unstructured academic documents such as syllabus PDFs into transparent, reviewable deadlines, allowing students to restore orientation and control swiftly.
+
+The name *PanicButton* reflects the moment of use, not the company’s long-term identity. The workflow’s purpose is rapid de-escalation through clarity.
 
 
 ## 2. The Problem: Academic Information Fails When Students Need It Most
@@ -50,9 +52,9 @@ They want one thing:
 
 
 
-## 4. The Solution: PanicButton
+## 4. The Solution: Cueforth Starts With PanicButton
 
-PanicButton is designed as an **emergency clarity tool**.
+The PanicButton workflow inside Cueforth is designed as an **emergency clarity tool**.
 
 It allows a student to upload a syllabus and, within seconds:
 - see what deadlines appear to matter
@@ -65,11 +67,11 @@ The system prioritizes speed, transparency, and honest uncertainty over complete
 
 ## 5. Phase 1 Focus (Deliberately Narrow)
 
-Phase 1 of PanicButton focuses on a single promise:
+Phase 1 of Cueforth focuses on a single promise:
 
 > Upload one syllabus → understand your deadlines.
 
-To maintain trust and feasibility, PanicButton:
+To maintain trust and feasibility, the PanicButton workflow:
 - operates only on user-provided documents
 - does not scrape or integrate with institutional systems
 - does not claim to be a source of truth
@@ -101,7 +103,7 @@ The value is not just extraction, but also the quick, low-cognitive-load review 
 
 ## 7. Technical Highlights
 
-PanicButton is built as a document-parsing and normalization system with:
+Cueforth is initially built around the PanicButton workflow as a document-parsing and normalization system with:
 - client-side PDF parsing for privacy and zero server dependency
 - rule-based deadline detection with configurable confidence scoring
 - in-browser `.ics` calendar generation
@@ -133,9 +135,9 @@ The architecture emphasizes correctness, explainability, and reproducibility ove
 
 
 
-## 9. What PanicButton Is Not
+## 9. What Cueforth Is Not
 
-PanicButton is intentionally not:
+The PanicButton workflow is intentionally not:
 - a planner or task manager
 - a replacement for official university systems
 - a degree-audit or advising tool
@@ -146,7 +148,7 @@ Its role is to provide clarity at the moment it is most needed.
 
 ## 13. Success Criteria (Phase 1)
 
-PanicButton is successful if:
+Cueforth is successful in Phase 1 if:
 - a student can go from PDF upload to reviewed deadline list in under 90 seconds
 - users trust the output because they can verify every extracted item
 - setup time is significantly lower than manual calendar entry
@@ -155,4 +157,3 @@ PanicButton is successful if:
 
 
 **Document Version:** 1.0  
-
