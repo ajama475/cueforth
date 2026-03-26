@@ -12,6 +12,23 @@ export const KEYWORDS: Array<{ type: DeadlineType; words: string[] }> = [
 
 const STRONG_SIGNAL = ["due", "deadline", "submit", "submission", "by"];
 const WEIGHT_SIGNAL = ["weight", "%", "worth"];
+const NEGATIVE_SIGNAL = [
+  "office hour",
+  "office hours",
+  "contact",
+  "email",
+  "phone",
+  "textbook",
+  "lecture topic",
+  "tutorial",
+  "course website",
+  "instructor",
+  "location",
+  "room",
+  "reading week",
+  "holiday",
+  "statutory holiday",
+];
 
 export interface KeywordHit {
   type: DeadlineType;
@@ -46,10 +63,12 @@ export function scoreCandidate(params: {
   const lower = context.toLowerCase();
 
   const flags: string[] = [...dateFlags];
-  let score = 25;
+  let score = 22;
+  const hasStrongSignal = STRONG_SIGNAL.some((signal) => lower.includes(signal));
 
-  for (const s of STRONG_SIGNAL) if (lower.includes(s)) score += 8;
+  for (const s of STRONG_SIGNAL) if (lower.includes(s)) score += 10;
   for (const w of WEIGHT_SIGNAL) if (lower.includes(w)) score += 6;
+  for (const n of NEGATIVE_SIGNAL) if (lower.includes(n)) score -= hasStrongSignal ? 4 : 12;
 
   let bestType: DeadlineType = "other";
   let bestProximity = Number.POSITIVE_INFINITY;
@@ -63,16 +82,21 @@ export function scoreCandidate(params: {
   }
 
   if (keywordHits.length > 0) {
-    score += 22;
-    if (bestProximity <= 30) score += 28;
-    else if (bestProximity <= 80) score += 18;
-    else score += 8;
+    score += 20;
+    if (bestProximity <= 16) score += 30;
+    else if (bestProximity <= 40) score += 22;
+    else if (bestProximity <= 90) score += 12;
+    else score += 4;
   } else {
     flags.push("no_deadline_keyword_in_chunk");
-    score -= 15;
+    score -= 18;
   }
 
   if (dateFlags.includes("ambiguous_slash_format")) score -= 18;
+  if (!hasStrongSignal && bestType === "other") score -= 10;
+  if (/\b(mon|monday|tue|tuesday|wed|wednesday|thu|thursday|fri|friday)\b/.test(lower) && !hasStrongSignal) {
+    score -= 8;
+  }
 
   score = Math.max(0, Math.min(100, score));
   if (score < 55) flags.push("low_confidence");
@@ -83,4 +107,3 @@ export function scoreCandidate(params: {
 
   return { confidence: score, flags, matchedKeywords, typeGuess: bestType };
 }
-

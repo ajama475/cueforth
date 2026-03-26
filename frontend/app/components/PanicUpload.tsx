@@ -236,10 +236,16 @@ export default function PanicUpload() {
     try {
       const result = await parsePDF(file);
       setPages(result.metadata.pages);
-      setRawText(result.text);
       setParsedPages(result.pages);
+
+      if (!result.hasExtractableText) {
+        setStatus(result.warnings[0]?.message ?? "No extractable text found in this PDF.");
+        return;
+      }
+
+      setRawText(result.text);
       setActivePageNumber(result.pages[0]?.pageNumber ?? null);
-      setStatus("Triage ready");
+      setStatus(result.warnings.length > 0 ? "Triage ready with parser warnings" : "Triage ready");
     } catch (err) {
       console.error(err);
       setStatus("Could not read this PDF.");
