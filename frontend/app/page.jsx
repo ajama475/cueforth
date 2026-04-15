@@ -56,8 +56,11 @@ function CourseRow({ code, name }) {
 export default function HomePage() {
   return (
     <main className="page-shell">
+      <div className="page-shell__wash" aria-hidden="true" />
+      <div className="page-shell__grid" aria-hidden="true" />
+
       <div className="page-frame">
-        <section className="setup-card" aria-labelledby="semester-setup-title">
+        <section className="setup-stage" aria-labelledby="semester-setup-title">
           <div className="brand-lockup">
             <span className="brand-lockup__eyebrow">Local-first semester planning</span>
             <span className="brand-lockup__name">Sync Your Semester</span>
