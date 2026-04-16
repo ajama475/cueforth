@@ -103,6 +103,7 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [setupValid, setSetupValid] = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     try {
@@ -122,6 +123,43 @@ export default function DashboardLayout({ children }) {
       router.replace("/");
     }
   }, [setupValid, router]);
+
+  async function handleReset() {
+    // 1. Clear localStorage
+    localStorage.removeItem("sys-semester-setup");
+
+    // 2. Clear IndexedDB
+    try {
+      const DB_NAME = "sync-your-semester";
+      const request = window.indexedDB.open(DB_NAME);
+      request.onsuccess = () => {
+        const db = request.result;
+        const storeNames = Array.from(db.objectStoreNames);
+        if (storeNames.length > 0) {
+          const tx = db.transaction(storeNames, "readwrite");
+          for (const name of storeNames) {
+            tx.objectStore(name).clear();
+          }
+          tx.oncomplete = () => {
+            db.close();
+            router.replace("/");
+          };
+          tx.onerror = () => {
+            db.close();
+            router.replace("/");
+          };
+        } else {
+          db.close();
+          router.replace("/");
+        }
+      };
+      request.onerror = () => {
+        router.replace("/");
+      };
+    } catch {
+      router.replace("/");
+    }
+  }
 
   if (setupValid === null) return null;
   if (setupValid === false) return null;
@@ -159,9 +197,49 @@ export default function DashboardLayout({ children }) {
             </nav>
           </div>
         ))}
+
+        <div style={{ marginTop: "auto", padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
+          <button
+            className="sidebar-nav__item"
+            style={{ color: "var(--text-tertiary)", fontSize: 13 }}
+            onClick={() => setShowResetConfirm(true)}
+          >
+            Reset semester
+          </button>
+        </div>
       </aside>
 
       <section className="main-content">{children}</section>
+
+      {showResetConfirm && (
+        <div className="modal-backdrop" onClick={() => setShowResetConfirm(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal__header">
+              <h2 className="modal__title">Reset all data?</h2>
+              <button className="modal__close" onClick={() => setShowResetConfirm(false)}>×</button>
+            </div>
+            <div className="modal__body">
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6, margin: 0 }}>
+                This will permanently remove your semester setup, all courses, uploaded syllabi, approved tasks,
+                manual tasks, recurring tasks, and completion history. You will return to a fresh start.
+              </p>
+              <p style={{ fontSize: 13, color: "var(--text-tertiary)", margin: 0 }}>
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal__footer">
+              <button className="btn-ghost" onClick={() => setShowResetConfirm(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                style={{ background: "var(--tag-red-text)" }}
+                onClick={handleReset}
+              >
+                Reset everything
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

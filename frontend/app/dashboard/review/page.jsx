@@ -171,6 +171,7 @@ function SnippetText({ text, terms }) {
 function PdfViewer({ record, selectedItem, currentPage, zoom }) {
   const canvasRef = useRef(null);
   const pdfCacheRef = useRef(new Map());
+  const renderTaskRef = useRef(null);
   const [renderState, setRenderState] = useState({
     loading: false,
     error: null,
@@ -187,6 +188,12 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
     let didCancel = false;
 
     async function renderPage() {
+      // Cancel any in-flight render before starting a new one
+      if (renderTaskRef.current) {
+        try { renderTaskRef.current.cancel(); } catch {}
+        renderTaskRef.current = null;
+      }
+
       if (!record?.fileBlob || !canvasRef.current) {
         setRenderState((prev) => ({ ...prev, loading: false }));
         return;
@@ -199,12 +206,19 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
 
         if (!pdfDocument) {
           pdfDocument = await loadPdfDocument(record.fileBlob);
+          if (didCancel) return;
           pdfCacheRef.current.set(record.id, pdfDocument);
         }
 
+        if (didCancel) return;
+
         const pdfPage = await pdfDocument.getPage(currentPage);
+        if (didCancel) return;
+
         const viewport = pdfPage.getViewport({ scale: zoom });
         const canvas = canvasRef.current;
+        if (!canvas || didCancel) return;
+
         const context = canvas.getContext("2d");
 
         canvas.width = viewport.width;
@@ -212,10 +226,15 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
         canvas.style.width = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
 
-        await pdfPage.render({
+        const renderTask = pdfPage.render({
           canvasContext: context,
           viewport,
-        }).promise;
+        });
+
+        renderTaskRef.current = renderTask;
+
+        await renderTask.promise;
+        renderTaskRef.current = null;
 
         if (didCancel) return;
 
@@ -226,9 +245,12 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
           height: viewport.height,
         });
       } catch (error) {
-        console.error("Failed to render review page.", error);
+        renderTaskRef.current = null;
 
-        if (didCancel) return;
+        // RenderingCancelledException is expected when we cancel — ignore it silently
+        if (error?.name === "RenderingCancelledException" || didCancel) return;
+
+        console.error("Failed to render review page.", error);
 
         setRenderState((prev) => ({
           ...prev,
@@ -242,6 +264,11 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
 
     return () => {
       didCancel = true;
+      // Cancel any in-flight render on cleanup
+      if (renderTaskRef.current) {
+        try { renderTaskRef.current.cancel(); } catch {}
+        renderTaskRef.current = null;
+      }
     };
   }, [record, currentPage, zoom]);
 

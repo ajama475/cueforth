@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 
 const STORAGE_KEY = "sys-semester-setup";
 
+function isSetupComplete() {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    const hasDates = parsed?.semesterDates?.startDate && parsed?.semesterDates?.endDate;
+    const hasCourses = Array.isArray(parsed?.courses) && parsed.courses.some((c) => c.code?.trim() || c.name?.trim());
+    return hasDates && hasCourses;
+  } catch {
+    return false;
+  }
+}
+
 const steps = [
   { key: "dates", label: "Dates" },
   { key: "courses", label: "Courses" },
@@ -79,13 +93,20 @@ function CourseRow({ id, code, name, onChange, onRemove }) {
 
 export default function SemesterSetupClient() {
   const router = useRouter();
-
+  const [hydrated, setHydrated] = useState(false);
   const [semesterDates, setSemesterDates] = useState({ startDate: "", endDate: "" });
   const [courses, setCourses] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
+    // If setup is already complete, redirect immediately — don't show setup again
+    if (isSetupComplete()) {
+      router.replace("/dashboard");
+      return;
+    }
+
+    // Otherwise, load any partial draft
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -94,7 +115,9 @@ export default function SemesterSetupClient() {
         if (Array.isArray(parsed?.courses) && parsed.courses.length > 0) setCourses(parsed.courses);
       }
     } catch {}
-  }, []);
+
+    setHydrated(true);
+  }, [router]);
 
   const hasDates = semesterDates.startDate !== "" && semesterDates.endDate !== "";
   const hasValidCourses = courses.some((c) => c.code.trim() !== "" || c.name.trim() !== "");
@@ -121,16 +144,12 @@ export default function SemesterSetupClient() {
   function handleDateChange(e) {
     const { name, value } = e.target;
     setSemesterDates((prev) => ({ ...prev, [name]: value }));
-    if (attempted) {
-      setValidationErrors((prev) => ({ ...prev, [name]: undefined }));
-    }
+    if (attempted) setValidationErrors((prev) => ({ ...prev, [name]: undefined }));
   }
 
   function handleCourseChange(id, field, value) {
     setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
-    if (attempted) {
-      setValidationErrors((prev) => ({ ...prev, courses: undefined }));
-    }
+    if (attempted) setValidationErrors((prev) => ({ ...prev, courses: undefined }));
   }
 
   function handleAddCourse() {
@@ -151,6 +170,9 @@ export default function SemesterSetupClient() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     router.push("/dashboard");
   }
+
+  // Don't render anything until hydration check is done (prevents setup flash)
+  if (!hydrated) return null;
 
   return (
     <main className="setup-page">
