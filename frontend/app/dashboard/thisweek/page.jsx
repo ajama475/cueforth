@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getAllSemesterTasks, getTaskBucket, getTaskUrgency, toggleTaskCompletion } from "../../../lib/tasks/taskHelpers";
+import {
+  getParentTasks,
+  getTaskBucket,
+  getTaskUrgency,
+  getNextAction,
+  isPrepWindowOpen,
+  toggleTaskCompletion,
+  getAllSemesterTasks,
+} from "../../../lib/tasks/taskHelpers";
 
 function formatDate(isoDate) {
   if (!isoDate) return "";
@@ -40,6 +48,30 @@ function TaskCard({ task, onToggle }) {
   );
 }
 
+function StartNowCard({ task, nextAction }) {
+  return (
+    <div className="start-now-card">
+      <div className="start-now-card__head">
+        <span className="start-now-card__type">{task.type}</span>
+        {task.course && task.course !== "—" && (
+          <span className="cell-course-badge">{task.course}</span>
+        )}
+      </div>
+      <h4 className="start-now-card__title">{task.title}</h4>
+      <div className="start-now-card__action">
+        <span className="start-now-card__action-label">Next action</span>
+        <span className="start-now-card__action-value">{nextAction.label}</span>
+      </div>
+      {nextAction.why && (
+        <p className="start-now-card__why">Start now — {nextAction.why}</p>
+      )}
+      <div className="start-now-card__due">
+        Due {formatDate(task.dueDate)}
+      </div>
+    </div>
+  );
+}
+
 function BucketColumn({ title, tasks, onToggle }) {
   return (
     <div className="horizon-bucket">
@@ -62,13 +94,18 @@ function BucketColumn({ title, tasks, onToggle }) {
   );
 }
 
-export default function ThisWeekPage() {
+export default function WhatMattersPage() {
   const [tasks, setTasks] = useState([]);
+  const [parentTasks, setParentTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadTasks = useCallback(async () => {
-    const data = await getAllSemesterTasks();
-    setTasks(data);
+    const [allData, parentData] = await Promise.all([
+      getAllSemesterTasks(),
+      getParentTasks(),
+    ]);
+    setTasks(allData);
+    setParentTasks(parentData);
     setLoading(false);
   }, []);
 
@@ -82,7 +119,7 @@ export default function ThisWeekPage() {
   if (loading) {
     return (
       <>
-        <header className="page-header"><h1 className="page-title">This Week</h1></header>
+        <header className="page-header"><h1 className="page-title">What Matters</h1></header>
         <div className="horizon-board">
           <p className="cell-placeholder" style={{ padding: 40 }}>Loading...</p>
         </div>
@@ -90,11 +127,23 @@ export default function ThisWeekPage() {
     );
   }
 
-  const buckets = { Overdue: [], Today: [], "This Week": [], "Next Week": [], Later: [] };
+  // Derive "Start Now" items: parent tasks with open prep windows and an active next action
+  const startNowItems = [];
+  for (const task of parentTasks) {
+    if (task.status === "done" || !task.milestones) continue;
+    if (!isPrepWindowOpen(task)) continue;
+    const action = getNextAction(task);
+    if (action && action.active) {
+      startNowItems.push({ task, nextAction: action });
+    }
+  }
+
+  // Standard buckets from all tasks (excluding milestone rows for cleaner display)
+  const buckets = { Overdue: [], Today: [], "This Week": [], "Next Week": [] };
   for (const task of tasks) {
-    if (task.status === "done") continue;
+    if (task.status === "done" || task.isMilestone) continue;
     const bucket = getTaskBucket(task.dueDate, task.status);
-    if (bucket !== "Done" && buckets[bucket]) {
+    if (bucket !== "Done" && bucket !== "Later" && buckets[bucket]) {
       buckets[bucket].push(task);
     }
   }
@@ -102,8 +151,22 @@ export default function ThisWeekPage() {
   return (
     <>
       <header className="page-header">
-        <h1 className="page-title">This Week</h1>
+        <h1 className="page-title">What Matters</h1>
       </header>
+
+      {startNowItems.length > 0 && (
+        <div className="start-now-section">
+          <div className="start-now-section__header">
+            <h2 className="start-now-section__title">Start now</h2>
+            <span className="start-now-section__subtitle">Major tasks with open preparation windows</span>
+          </div>
+          <div className="start-now-section__grid">
+            {startNowItems.map(({ task, nextAction }) => (
+              <StartNowCard key={task.id} task={task} nextAction={nextAction} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="horizon-board">
         {buckets.Overdue.length > 0 && (
@@ -112,7 +175,6 @@ export default function ThisWeekPage() {
         <BucketColumn title="Today" tasks={buckets.Today} onToggle={handleToggle} />
         <BucketColumn title="This Week" tasks={buckets["This Week"]} onToggle={handleToggle} />
         <BucketColumn title="Next Week" tasks={buckets["Next Week"]} onToggle={handleToggle} />
-        <BucketColumn title="Later" tasks={buckets.Later} onToggle={handleToggle} />
       </div>
     </>
   );

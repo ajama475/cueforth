@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-function IconSchedule() {
+function IconLedger() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -60,7 +60,7 @@ function IconCalendar() {
   );
 }
 
-function IconThisWeek() {
+function IconFocus() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
@@ -80,12 +80,36 @@ function BrandIcon() {
   );
 }
 
+function IconSun() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+
+function IconMoon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+    </svg>
+  );
+}
+
 const navSections = [
   {
     label: "Semester",
     items: [
-      { label: "Semester Schedule", href: "/dashboard", icon: IconSchedule },
-      { label: "This Week", href: "/dashboard/thisweek", icon: IconThisWeek },
+      { label: "Task Ledger", href: "/dashboard", icon: IconLedger },
+      { label: "What Matters", href: "/dashboard/thisweek", icon: IconFocus },
       { label: "Calendar", href: "/dashboard/calendar", icon: IconCalendar },
     ],
   },
@@ -99,11 +123,44 @@ const navSections = [
   },
 ];
 
+const pageNames = {
+  "/dashboard": "Task Ledger",
+  "/dashboard/thisweek": "What Matters",
+  "/dashboard/calendar": "Calendar",
+  "/dashboard/upload": "Upload",
+  "/dashboard/review": "Review",
+  "/dashboard/coursetasks": "Course Tasks",
+};
+
+function useTheme() {
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    // Read current state from the DOM (set by the init script in layout.jsx)
+    const current = document.documentElement.getAttribute("data-theme");
+    setTheme(current === "light" ? "light" : "dark");
+  }, []);
+
+  function toggle() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    if (next === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    try { localStorage.setItem("sys-theme", next); } catch {}
+  }
+
+  return { theme, toggle };
+}
+
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [setupValid, setSetupValid] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const { theme, toggle: toggleTheme } = useTheme();
 
   useEffect(() => {
     try {
@@ -169,6 +226,9 @@ export default function DashboardLayout({ children }) {
     return pathname.startsWith(href);
   }
 
+  // Derive current page name for breadcrumb
+  const currentPageName = pageNames[pathname] || "Dashboard";
+
   return (
     <div className="dashboard">
       <aside className="sidebar">
@@ -201,7 +261,7 @@ export default function DashboardLayout({ children }) {
         <div style={{ marginTop: "auto", padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
           <button
             className="sidebar-nav__item"
-            style={{ color: "var(--text-tertiary)", fontSize: 13 }}
+            style={{ color: "var(--text-tertiary)", fontSize: 12 }}
             onClick={() => setShowResetConfirm(true)}
           >
             Reset semester
@@ -209,7 +269,28 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      <section className="main-content">{children}</section>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        {/* Top bar */}
+        <div className="topbar">
+          <div className="topbar__breadcrumb">
+            <span>Sync Your Semester</span>
+            <span className="topbar__breadcrumb-sep">/</span>
+            <span className="topbar__breadcrumb-current">{currentPageName}</span>
+          </div>
+          <div className="topbar__actions">
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              {theme === "dark" ? <IconSun /> : <IconMoon />}
+            </button>
+          </div>
+        </div>
+
+        <section className="main-content">{children}</section>
+      </div>
 
       {showResetConfirm && (
         <div className="modal-backdrop" onClick={() => setShowResetConfirm(false)}>

@@ -1,56 +1,120 @@
 /* ===========================================
    Sync Your Semester — Design System
-   Notion-inspired, calm, university portal feel
+   Premium academic planning · Dark/Light mode
    =========================================== */
 
+/* ---- Google Font (loaded in layout.jsx) ---- */
+
+/* ---- Dark Mode (default) ---- */
 :root {
-  /* Core palette — warm neutrals (Notion-inspired) */
-  --bg: #ffffff;
-  --bg-secondary: #fbfbfa;
-  --bg-sidebar: #f7f6f3;
-  --bg-hover: rgba(55, 53, 47, 0.04);
-  --bg-active: rgba(55, 53, 47, 0.08);
+  /* Core surfaces */
+  --bg: #0f1117;
+  --bg-secondary: #151820;
+  --bg-sidebar: #0a0c10;
+  --bg-hover: rgba(255, 255, 255, 0.03);
+  --bg-active: rgba(255, 255, 255, 0.06);
+  --bg-card: #1a1d24;
+  --bg-card-hover: #1e2129;
+  --bg-topbar: #0f1117;
 
-  --text: #37352f;
-  --text-secondary: #787774;
-  --text-tertiary: #a4a4a0;
+  /* Text */
+  --text: #e8e8e6;
+  --text-secondary: #8b8b8b;
+  --text-tertiary: #555555;
 
-  --border: rgba(55, 53, 47, 0.09);
-  --border-strong: rgba(55, 53, 47, 0.16);
-  --divider: rgba(55, 53, 47, 0.06);
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --divider: rgba(255, 255, 255, 0.04);
 
-  /* Accent — Notion blue */
-  --accent: #2383e2;
-  --accent-hover: #1b6ec2;
-  --accent-light: rgba(35, 131, 226, 0.06);
+  /* Accent — muted academic blue */
+  --accent: #5b8fb9;
+  --accent-hover: #4d7ea6;
+  --accent-light: rgba(91, 143, 185, 0.08);
+  --accent-subtle: rgba(91, 143, 185, 0.12);
 
-  /* Status tags (Notion-inspired select colors) */
-  --tag-red-bg: #ffe2dd;
-  --tag-red-text: #e03e3e;
-  --tag-orange-bg: #fadec9;
-  --tag-orange-text: #d9730d;
-  --tag-yellow-bg: #fdecc8;
-  --tag-yellow-text: #cb8a00;
-  --tag-green-bg: #dbeddb;
-  --tag-green-text: #0f7b6c;
-  --tag-blue-bg: #d3e5ef;
-  --tag-blue-text: #0b6e99;
-  --tag-gray-bg: rgba(55, 53, 47, 0.06);
-  --tag-gray-text: #787774;
-  --tag-purple-bg: #e8deee;
-  --tag-purple-text: #6940a5;
+  /* Status tags — reserved for urgency/state only */
+  --tag-red-bg: rgba(220, 60, 60, 0.12);
+  --tag-red-text: #e05555;
+  --tag-orange-bg: rgba(210, 130, 40, 0.12);
+  --tag-orange-text: #d4933d;
+  --tag-yellow-bg: rgba(200, 160, 40, 0.12);
+  --tag-yellow-text: #c8a730;
+  --tag-green-bg: rgba(60, 170, 100, 0.12);
+  --tag-green-text: #48b06a;
+  --tag-blue-bg: rgba(91, 143, 185, 0.10);
+  --tag-blue-text: #5b8fb9;
+  --tag-gray-bg: rgba(255, 255, 255, 0.05);
+  --tag-gray-text: #666666;
+  --tag-purple-bg: rgba(140, 100, 190, 0.12);
+  --tag-purple-text: #9b7bc7;
 
   /* Typography */
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
 
-  /* Radius — small, functional (not bubbly) */
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.35);
 
   /* Motion */
-  --ease: 120ms ease;
+  --ease: 150ms ease;
   --ease-fast: 80ms ease;
+}
+
+/* ---- Light Mode ---- */
+[data-theme="light"] {
+  /* Core surfaces */
+  --bg: #f5f5f3;
+  --bg-secondary: #eeedea;
+  --bg-sidebar: #eae8e4;
+  --bg-hover: rgba(0, 0, 0, 0.03);
+  --bg-active: rgba(0, 0, 0, 0.06);
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafafa;
+  --bg-topbar: #f5f5f3;
+
+  /* Text */
+  --text: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #999999;
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --divider: rgba(0, 0, 0, 0.05);
+
+  /* Accent */
+  --accent: #4a7fa5;
+  --accent-hover: #3e6d8f;
+  --accent-light: rgba(74, 127, 165, 0.06);
+  --accent-subtle: rgba(74, 127, 165, 0.10);
+
+  /* Status tags */
+  --tag-red-bg: #fde8e8;
+  --tag-red-text: #c53030;
+  --tag-orange-bg: #feebc8;
+  --tag-orange-text: #c05621;
+  --tag-yellow-bg: #fefcbf;
+  --tag-yellow-text: #b7791f;
+  --tag-green-bg: #e6f4ea;
+  --tag-green-text: #1a7f44;
+  --tag-blue-bg: #e2edf5;
+  --tag-blue-text: #4a7fa5;
+  --tag-gray-bg: rgba(0, 0, 0, 0.04);
+  --tag-gray-text: #888888;
+  --tag-purple-bg: #ede5f5;
+  --tag-purple-text: #7c3aab;
+
+  /* Shadows — softer in light mode */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
 /* ---- Reset ---- */
@@ -113,7 +177,7 @@ a {
   padding: 48px 0 80px;
 }
 
-/* Brand — small, quiet, top-left feel */
+/* Brand — small, quiet */
 .setup-brand {
   display: flex;
   align-items: center;
@@ -122,10 +186,10 @@ a {
 }
 
 .setup-brand__icon {
-  width: 24px;
-  height: 24px;
-  background: var(--text);
-  border-radius: 5px;
+  width: 26px;
+  height: 26px;
+  background: var(--accent);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -141,6 +205,7 @@ a {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 /* Progress — minimal step indicator */
@@ -208,9 +273,9 @@ a {
 
 /* Heading */
 .setup-heading {
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   line-height: 1.2;
   color: var(--text);
   margin: 0 0 6px;
@@ -241,7 +306,7 @@ a {
   gap: 12px;
 }
 
-/* Field — clean Notion-style inputs */
+/* Field — clean inputs */
 .field {
   display: flex;
   flex-direction: column;
@@ -256,18 +321,22 @@ a {
 
 .field__input {
   width: 100%;
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  background: var(--bg);
+  background: var(--bg-card);
   color: var(--text);
   font-size: 14px;
   transition: border-color var(--ease), box-shadow var(--ease);
 }
 
 .field__input:hover {
-  border-color: rgba(55, 53, 47, 0.3);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="light"] .field__input:hover {
+  border-color: rgba(0, 0, 0, 0.2);
 }
 
 .field__input:focus {
@@ -318,7 +387,7 @@ a {
   gap: 8px;
   align-items: end;
   padding: 10px 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   transition: border-color var(--ease);
@@ -401,7 +470,7 @@ a {
 
 .btn-add:hover {
   background: var(--bg-hover);
-  border-color: rgba(55, 53, 47, 0.3);
+  border-color: var(--accent);
   color: var(--text);
 }
 
@@ -424,6 +493,14 @@ a {
   justify-content: space-between;
 }
 
+/* Setup theme toggle */
+.setup-theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  z-index: 100;
+}
+
 /* ===========================================
    DASHBOARD
    =========================================== */
@@ -440,7 +517,7 @@ a {
   flex-direction: column;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
-  padding: 12px 8px;
+  padding: 16px 10px;
   height: 100vh;
   position: sticky;
   top: 0;
@@ -451,15 +528,15 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 8px 8px;
-  margin-bottom: 12px;
+  padding: 4px 8px 12px;
+  margin-bottom: 8px;
 }
 
 .sidebar-brand__icon {
-  width: 24px;
-  height: 24px;
-  background: var(--text);
-  border-radius: 5px;
+  width: 26px;
+  height: 26px;
+  background: var(--accent);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -478,35 +555,37 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
 .sidebar-section {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .sidebar-section__label {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--text-tertiary);
-  padding: 0 8px;
-  margin-bottom: 4px;
-  letter-spacing: 0.03em;
+  padding: 0 10px;
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 .sidebar-nav__item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 8px;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
@@ -515,6 +594,7 @@ a {
   background: transparent;
   text-align: left;
   width: 100%;
+  position: relative;
 }
 
 .sidebar-nav__item:hover {
@@ -528,6 +608,17 @@ a {
   font-weight: 600;
 }
 
+.sidebar-nav__item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
 .sidebar-nav__icon {
   width: 18px;
   height: 18px;
@@ -536,11 +627,75 @@ a {
   justify-content: center;
   flex-shrink: 0;
   color: inherit;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .sidebar-nav__item--active .sidebar-nav__icon {
   opacity: 1;
+  color: var(--accent);
+}
+
+/* ---- Top Bar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 40px;
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.topbar__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.topbar__breadcrumb-sep {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+}
+
+.topbar__breadcrumb-current {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--ease);
+  color: var(--text-secondary);
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--bg-card-hover);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Main Content ---- */
@@ -554,19 +709,76 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 48px 0;
+  padding: 28px 40px 0;
 }
 
 .page-title {
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: var(--text);
+}
+
+/* ---- Dashboard Summary Cards ---- */
+.dashboard-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 0 40px;
+  margin-top: 20px;
+}
+
+.summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  transition: border-color var(--ease);
+}
+
+.summary-card:hover {
+  border-color: var(--border-strong);
+}
+
+.summary-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.summary-card__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.summary-card__value--accent {
+  color: var(--accent);
+}
+
+.summary-card__detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.summary-card__detail--urgent {
+  color: var(--tag-red-text);
+}
+
+.summary-card__detail--safe {
+  color: var(--tag-green-text);
 }
 
 /* ---- Database / Table View ---- */
 .database-view {
-  margin: 20px 48px 48px;
+  margin: 20px 40px 48px;
   flex: 1;
 }
 
@@ -596,12 +808,13 @@ a {
   font-weight: 400;
 }
 
-/* Table — Notion database style */
+/* Table — premium database style */
 .db-table-wrap {
   width: 100%;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  background: var(--bg-card);
 }
 
 .db-table {
@@ -611,15 +824,17 @@ a {
 
 .db-table thead th {
   padding: 6px 12px;
-  height: 34px;
+  height: 36px;
   background: var(--bg-secondary);
   text-align: left;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .db-table thead th:not(:last-child) {
@@ -641,7 +856,7 @@ a {
 
 .db-table tbody td {
   padding: 6px 12px;
-  height: 36px;
+  height: 38px;
   vertical-align: middle;
   font-size: 14px;
 }
@@ -670,16 +885,17 @@ a {
   font-size: 13px;
 }
 
-/* Tags — Notion-style select badges */
+/* Tags — status badges */
 .tag {
   display: inline-flex;
   align-items: center;
   height: 20px;
-  padding: 0 6px;
+  padding: 0 7px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
 .tag--red {
@@ -743,7 +959,7 @@ a {
   padding: 0 8px;
   border: 1.5px solid var(--accent);
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--bg-card);
   color: var(--text);
   font-size: 14px;
   box-shadow: 0 0 0 2px var(--accent-light);
@@ -795,7 +1011,7 @@ a {
 .review-layout {
   display: grid;
   grid-template-columns: 1fr 380px;
-  height: calc(100vh - 0px);
+  height: calc(100vh - 48px);
   overflow: hidden;
 }
 
@@ -804,7 +1020,7 @@ a {
 .review-pdf {
   display: flex;
   flex-direction: column;
-  background: var(--bg-sidebar);
+  background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   overflow: hidden;
 }
@@ -815,7 +1031,7 @@ a {
   justify-content: space-between;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-card);
   min-height: 40px;
 }
 
@@ -859,10 +1075,10 @@ a {
   position: relative;
   width: fit-content;
   max-width: 100%;
-  background: var(--bg);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -874,9 +1090,9 @@ a {
 
 .review-pdf__highlight-box {
   position: absolute;
-  border: 2px solid rgba(35, 131, 226, 0.95);
-  background: rgba(35, 131, 226, 0.15);
-  box-shadow: 0 0 0 1px rgba(35, 131, 226, 0.12);
+  border: 2px solid rgba(91, 143, 185, 0.9);
+  background: rgba(91, 143, 185, 0.12);
+  box-shadow: 0 0 0 1px rgba(91, 143, 185, 0.1);
   pointer-events: none;
 }
 
@@ -886,15 +1102,19 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(15, 17, 23, 0.7);
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
 
+[data-theme="light"] .review-pdf__loading {
+  background: rgba(255, 255, 255, 0.7);
+}
+
 .review-highlight {
-  background: rgba(35, 131, 226, 0.15);
-  color: var(--accent-hover);
+  background: rgba(91, 143, 185, 0.15);
+  color: var(--accent);
   font-weight: 600;
   font-style: italic;
   padding: 1px 2px;
@@ -907,7 +1127,7 @@ a {
   font-size: 12px;
   color: var(--tag-orange-text);
   background: var(--tag-orange-bg);
-  border: 1px solid rgba(217, 115, 13, 0.18);
+  border: 1px solid rgba(210, 130, 40, 0.18);
   border-radius: var(--radius-md);
   padding: 10px 12px;
 }
@@ -917,7 +1137,7 @@ a {
   max-width: 760px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--bg);
+  background: var(--bg-card);
   overflow: hidden;
 }
 
@@ -951,7 +1171,7 @@ a {
 
 .review-pdf__source-line--selected {
   color: var(--text);
-  background: rgba(35, 131, 226, 0.08);
+  background: var(--accent-light);
 }
 
 /* PDF controls */
@@ -962,7 +1182,7 @@ a {
   gap: 24px;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-card);
 }
 
 .review-pdf__zoom,
@@ -1009,7 +1229,7 @@ a {
 .review-queue {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 0px);
+  height: calc(100vh - 48px);
   overflow: hidden;
   background: var(--bg);
 }
@@ -1070,7 +1290,7 @@ a {
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--bg-card);
   cursor: pointer;
   transition: all var(--ease);
 }
@@ -1081,7 +1301,7 @@ a {
 
 .review-card--selected {
   border-color: var(--accent);
-  background: var(--bg);
+  background: var(--bg-card);
   box-shadow: 0 0 0 1px var(--accent);
   cursor: default;
 }
@@ -1213,7 +1433,7 @@ a {
   font-weight: 500;
   cursor: pointer;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-card);
   color: var(--text-secondary);
   transition: all var(--ease);
 }
@@ -1315,7 +1535,7 @@ a {
   display: grid;
   grid-template-columns: 1fr 320px;
   gap: 24px;
-  padding: 20px 48px 48px;
+  padding: 20px 40px 48px;
   flex: 1;
   align-items: start;
 }
@@ -1336,7 +1556,7 @@ a {
   padding: 48px 32px;
   border: 1.5px dashed var(--border-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--bg-card);
   text-align: center;
   transition: all var(--ease);
   cursor: pointer;
@@ -1348,7 +1568,7 @@ a {
 }
 
 .upload-dropzone:hover {
-  border-color: rgba(55, 53, 47, 0.3);
+  border-color: var(--accent);
   background: var(--bg-hover);
 }
 
@@ -1396,7 +1616,7 @@ a {
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--bg-card);
 }
 
 .upload-feature-card__icon {
@@ -1431,14 +1651,14 @@ a {
 .upload-panel__section {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--bg-card);
   padding: 16px;
 }
 
 .upload-panel__heading {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0 0 12px;
@@ -1524,7 +1744,7 @@ a {
   padding: 0 8px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--bg-card);
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
@@ -1652,14 +1872,14 @@ a {
 }
 
 /* ===========================================
-   HORIZON VIEW
+   HORIZON VIEW (What Matters)
    =========================================== */
 
 .horizon-board {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   overflow-x: auto;
-  padding: 0 48px 48px;
+  padding: 0 40px 48px;
   margin-top: 24px;
   height: calc(100vh - 120px);
 }
@@ -1668,7 +1888,7 @@ a {
   flex: 0 0 280px;
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   max-height: 100%;
@@ -1683,20 +1903,21 @@ a {
 }
 
 .horizon-bucket__title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .horizon-bucket__count {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-tertiary);
-  background: var(--bg);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   padding: 2px 6px;
   border-radius: 999px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .horizon-bucket__list {
@@ -1705,27 +1926,26 @@ a {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .horizon-card {
-  background: var(--bg);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   display: flex;
   gap: 10px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
   transition: all var(--ease);
 }
 
 .horizon-card:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  background: var(--bg-card-hover);
 }
 
 .horizon-card--done {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .horizon-card--done .horizon-card__title {
@@ -1738,14 +1958,15 @@ a {
   cursor: pointer;
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1.5px solid var(--border-strong);
   appearance: none;
-  background: var(--bg);
+  background: var(--bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all var(--ease-fast);
 }
 
 .horizon-card__checkbox:checked {
@@ -1799,9 +2020,23 @@ a {
    CALENDAR VIEW
    =========================================== */
 
+/* Calendar layout — supports side panel */
+.calendar-layout {
+  display: flex;
+  gap: 0;
+}
+.calendar-layout--panel-open {
+  gap: 24px;
+}
+.calendar-layout--panel-open .calendar-view {
+  flex: 1;
+  min-width: 0;
+}
+
 .calendar-view {
-  padding: 0 48px 48px;
+  padding: 0 40px 48px;
   margin-top: 24px;
+  flex: 1;
 }
 
 .calendar-header {
@@ -1827,7 +2062,7 @@ a {
   grid-template-columns: repeat(7, 1fr);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--bg-card);
   overflow: hidden;
 }
 
@@ -1835,11 +2070,11 @@ a {
   background: var(--bg-secondary);
   padding: 8px;
   text-align: right;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1849,9 +2084,15 @@ a {
 
 .calendar-cell {
   position: relative;
-  min-height: 110px;
+  min-height: 100px;
   padding: 6px;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--ease-fast);
+}
+
+.calendar-cell:hover {
+  background: var(--bg-hover);
 }
 
 .calendar-cell:not(:nth-child(7n)) {
@@ -1860,11 +2101,16 @@ a {
 
 .calendar-cell--other-month {
   background: var(--bg-secondary);
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .calendar-cell--today {
   background: var(--accent-light);
+}
+
+.calendar-cell--selected {
+  background: var(--accent-subtle);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .calendar-cell__date {
@@ -1872,7 +2118,7 @@ a {
   font-weight: 500;
   color: var(--text-tertiary);
   text-align: right;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .calendar-cell--today .calendar-cell__date {
@@ -1883,12 +2129,20 @@ a {
 .calendar-cell__events {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
+.calendar-cell__more {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 1px 0;
+}
+
+/* Calendar events — visual hierarchy */
 .calendar-event {
   font-size: 11px;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -1896,27 +2150,345 @@ a {
   cursor: pointer;
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  border-left: 2px solid transparent;
+  border-left: 2.5px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .calendar-event--done {
-  opacity: 0.4;
+  opacity: 0.35;
   text-decoration: line-through;
 }
 
-.calendar-event--red { border-left-color: var(--tag-red-text); }
-.calendar-event--orange { border-left-color: var(--tag-orange-text); }
+/* Urgency colors — deadlines get bold left borders */
+.calendar-event--red { border-left-color: var(--tag-red-text); font-weight: 500; color: var(--text); }
+.calendar-event--orange { border-left-color: var(--tag-orange-text); font-weight: 500; color: var(--text); }
 .calendar-event--blue { border-left-color: var(--tag-blue-text); }
 .calendar-event--gray { border-left-color: var(--tag-gray-text); }
 .calendar-event--green { border-left-color: var(--tag-green-text); }
 
+/* Milestone events — lighter, de-emphasized */
+.calendar-event--milestone {
+  border-left-color: var(--tag-purple-text);
+  background: var(--tag-purple-bg);
+  color: var(--tag-purple-text);
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* Start-by events — soft green accent */
+.calendar-event--start-by {
+  border-left-color: var(--tag-green-text);
+  background: var(--tag-green-bg);
+  color: var(--tag-green-text);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.calendar-event__start-icon,
+.calendar-event__ms-icon {
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.calendar-event__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Calendar legend */
+.calendar-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.calendar-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.calendar-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.calendar-legend__swatch--deadline {
+  background: var(--bg-secondary);
+  border-left: 2.5px solid var(--tag-orange-text);
+}
+
+.calendar-legend__swatch--prep {
+  background: var(--tag-purple-bg);
+  border-left: 2.5px solid var(--tag-purple-text);
+}
+
+.calendar-legend__swatch--start {
+  background: var(--tag-green-bg);
+  border-left: 2.5px solid var(--tag-green-text);
+}
+
+/* Day detail panel */
+.calendar-panel {
+  width: 320px;
+  flex-shrink: 0;
+  padding: 24px 24px 24px 0;
+  margin-top: 24px;
+}
+
+.calendar-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.calendar-panel__date {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.calendar-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.calendar-panel__empty {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 24px 0;
+}
+
+.calendar-panel__item {
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.calendar-panel__item--done {
+  opacity: 0.5;
+}
+
+.calendar-panel__item-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.calendar-panel__item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.calendar-panel__item-parent {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+
+.calendar-panel__ms-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tag-purple-text);
+  background: var(--tag-purple-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.calendar-panel__start-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tag-green-text);
+  background: var(--tag-green-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.calendar-panel__next-action {
+  font-size: 12px;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+.calendar-panel__action-label {
+  font-weight: 600;
+}
+
+.calendar-panel__action-why {
+  color: var(--text-tertiary);
+}
+
+.calendar-panel__start-hint {
+  font-size: 12px;
+  color: var(--tag-green-text);
+  margin-top: 2px;
+}
+
+/* ===========================================
+   START NOW SECTION — What Matters view
+   =========================================== */
+
+.start-now-section {
+  padding: 0 40px;
+  margin-bottom: 8px;
+}
+
+.start-now-section__header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.start-now-section__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.start-now-section__subtitle {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.start-now-section__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.start-now-card {
+  padding: 14px 16px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.start-now-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.start-now-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.start-now-card__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.start-now-card__action-label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.start-now-card__action-value {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.start-now-card__why {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+}
+
+.start-now-card__due {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* Completed row treatment */
 .db-table-row--done {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 .db-table-row--done .cell-task {
   text-decoration: line-through;
   color: var(--text-secondary);
+}
+
+/* Milestone row treatment */
+.db-table-row--milestone {
+  background: var(--bg-secondary);
+}
+.db-table-row--milestone td:first-child {
+  padding-left: 12px;
+}
+.cell-task--milestone {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Course badge (inline, lightweight) */
+.cell-course-badge {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+/* Difficulty dots input (clickable in modal) */
+.dots--input {
+  gap: 4px;
+}
+.dots__dot--clickable {
+  cursor: pointer;
+  transition: all var(--ease-fast);
+}
+.dots__dot--clickable:hover {
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+/* Start by date — slightly emphasized */
+.cell-date--start {
+  color: var(--tag-green-text);
+  font-weight: 500;
+}
+
+/* Milestone why hint */
+.cell-why-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin-top: 1px;
 }
 
 /* ===========================================
@@ -1947,12 +2519,16 @@ a {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   animation: modal-fade-in 120ms ease;
+}
+
+[data-theme="light"] .modal-backdrop {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 @keyframes modal-fade-in {
@@ -1961,10 +2537,10 @@ a {
 }
 
 .modal {
-  background: var(--bg);
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border);
+  box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
@@ -2057,7 +2633,7 @@ a {
   justify-content: center;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
-  background: var(--bg);
+  background: var(--bg-card);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -2104,6 +2680,10 @@ a {
     font-size: 13px;
   }
 
+  .sidebar-nav__item--active::before {
+    display: none;
+  }
+
   .page-header {
     padding: 20px 20px 0;
   }
@@ -2136,6 +2716,27 @@ a {
     height: auto;
     max-height: 50vh;
   }
+
+  .dashboard-summary {
+    grid-template-columns: repeat(2, 1fr);
+    padding: 0 20px;
+  }
+
+  .topbar {
+    padding: 0 20px;
+  }
+
+  .horizon-board {
+    padding: 0 20px 32px;
+  }
+
+  .calendar-view {
+    padding: 0 20px 32px;
+  }
+
+  .start-now-section {
+    padding: 0 20px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2153,5 +2754,9 @@ a {
 
   .setup-heading {
     font-size: 26px;
+  }
+
+  .dashboard-summary {
+    grid-template-columns: 1fr;
   }
 }

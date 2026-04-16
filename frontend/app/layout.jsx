@@ -11,7 +11,37 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+        {/* Inline script to set theme before paint — prevents flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('sys-theme');
+                  if (stored === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                  } else if (stored === 'dark') {
+                    // default is dark, no attribute needed
+                  } else {
+                    // Auto-detect from OS
+                    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                      document.documentElement.setAttribute('data-theme', 'light');
+                    }
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

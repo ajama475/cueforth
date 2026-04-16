@@ -8,6 +8,7 @@ import {
   listSyllabusRecords,
   patchSyllabusRecord,
 } from "../../../lib/storage/syllabusStore";
+import { generateMilestones, readSetup } from "../../../lib/tasks/taskHelpers";
 
 const SETUP_STORAGE_KEY = "sys-semester-setup";
 
@@ -456,10 +457,20 @@ function ReviewPageContent() {
 
   const handleApprove = useCallback(
     (item) => {
-      void updateReviewItem(item.recordId, item.id, (current) => ({
-        ...current,
-        status: "approved",
-      }));
+      void updateReviewItem(item.recordId, item.id, (current) => {
+        const { semester } = readSetup();
+        const { milestones, startByDate } = generateMilestones({
+          type: current.type,
+          dueDate: current.dueDateRaw,
+          difficulty: current.difficulty,
+        }, semester?.startDate);
+        return {
+          ...current,
+          status: "approved",
+          milestones: milestones.length > 0 ? milestones : null,
+          startByDate: startByDate,
+        };
+      });
     },
     [updateReviewItem]
   );

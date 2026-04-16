@@ -3,11 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getAllSemesterTasks,
+  getParentTasks,
   getTaskUrgency,
+  getTaskBucket,
+  isPrepWindowOpen,
+  getNextAction,
   toggleTaskCompletion,
   createTask,
   readSetup,
 } from "../../lib/tasks/taskHelpers";
+import { listSyllabusRecords } from "../../lib/storage/syllabusStore";
 
 function formatDate(isoDate) {
   if (!isoDate) return "";
@@ -27,6 +32,17 @@ function TypeTag({ type }) {
   return <span className="tag tag--purple">{type.charAt(0).toUpperCase() + type.slice(1)}</span>;
 }
 
+function DifficultyDots({ value }) {
+  if (!value) return <span className="cell-placeholder">—</span>;
+  return (
+    <div className="dots" aria-label={`Difficulty ${value} of 5`}>
+      {[1, 2, 3, 4, 5].map((dot) => (
+        <span key={dot} className={`dots__dot${dot <= value ? " dots__dot--filled" : ""}`} />
+      ))}
+    </div>
+  );
+}
+
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function TaskModal({ open, onClose, onCreated, courses, semester }) {
@@ -34,6 +50,7 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
   const [dueDate, setDueDate] = useState("");
   const [courseId, setCourseId] = useState("");
   const [type, setType] = useState("other");
+  const [difficulty, setDifficulty] = useState(0);
   const [isLoop, setIsLoop] = useState(false);
   const [loopDays, setLoopDays] = useState([]);
   const [loopStart, setLoopStart] = useState(semester?.startDate || "");
@@ -42,8 +59,9 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
 
   function reset() {
     setTitle(""); setDueDate(""); setCourseId(""); setType("other");
-    setIsLoop(false); setLoopDays([]); setLoopStart(semester?.startDate || "");
-    setLoopEnd(semester?.endDate || ""); setNotes("");
+    setDifficulty(0); setIsLoop(false); setLoopDays([]);
+    setLoopStart(semester?.startDate || ""); setLoopEnd(semester?.endDate || "");
+    setNotes("");
   }
 
   function toggleDay(day) {
@@ -61,6 +79,7 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
       courseId: courseId || null,
       courseLabel,
       type,
+      difficulty: difficulty || null,
       notes: notes.trim(),
       recurrence: isLoop && loopDays.length > 0 ? {
         days: loopDays,
@@ -112,10 +131,26 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
                 <option value="project">Project</option>
                 <option value="lab">Lab</option>
                 <option value="presentation">Presentation</option>
+                <option value="essay">Essay</option>
                 <option value="reading">Reading</option>
               </select>
             </label>
           </div>
+
+          <label className="field">
+            <span className="field__label">Difficulty</span>
+            <div className="dots dots--input" aria-label="Set difficulty">
+              {[1, 2, 3, 4, 5].map((dot) => (
+                <button
+                  key={dot}
+                  type="button"
+                  className={`dots__dot dots__dot--clickable${dot <= difficulty ? " dots__dot--filled" : ""}`}
+                  onClick={() => setDifficulty(dot === difficulty ? 0 : dot)}
+                  aria-label={`Difficulty ${dot}`}
+                />
+              ))}
+            </div>
+          </label>
 
           <label className="field" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 8 }}>
             <input type="checkbox" checked={isLoop} onChange={(e) => setIsLoop(e.target.checked)} className="horizon-card__checkbox" />
@@ -174,16 +209,47 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
   );
 }
 
-export default function SemesterSchedulePage() {
+/* ===========================================
+   Summary Cards — Dashboard Overview
+   =========================================== */
+
+function SummaryCard({ label, value, detail, detailClass, accentValue }) {
+  return (
+    <div className="summary-card">
+      <div className="summary-card__label">{label}</div>
+      <div className={`summary-card__value${accentValue ? " summary-card__value--accent" : ""}`}>{value}</div>
+      {detail && <div className={`summary-card__detail${detailClass ? ` summary-card__detail--${detailClass}` : ""}`}>{detail}</div>}
+    </div>
+  );
+}
+
+export default function TaskLedgerPage() {
   const [tasks, setTasks] = useState([]);
+  const [parentTasks, setParentTasks] = useState([]);
+  const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
   const { courses, semester } = useMemo(() => readSetup(), []);
 
   const loadTasks = useCallback(async () => {
-    const data = await getAllSemesterTasks();
+    const [data, parents, records] = await Promise.all([
+      getAllSemesterTasks(),
+      getParentTasks(),
+      listSyllabusRecords(),
+    ]);
     setTasks(data);
+    setParentTasks(parents);
+
+    // Count unreviewed items
+    let pending = 0;
+    for (const record of records) {
+      for (const item of record.reviewItems || []) {
+        if (item.status === "pending") pending++;
+      }
+    }
+    setReviewCount(pending);
+
     setLoading(false);
   }, []);
 
@@ -194,16 +260,43 @@ export default function SemesterSchedulePage() {
     loadTasks();
   }
 
+  // Derive summary data
+  const summary = useMemo(() => {
+    const active = tasks.filter((t) => t.status !== "done" && !t.isMilestone);
+    const today = active.filter((t) => getTaskBucket(t.dueDate, t.status) === "Today").length;
+    const thisWeek = active.filter((t) => {
+      const bucket = getTaskBucket(t.dueDate, t.status);
+      return bucket === "Today" || bucket === "This Week" || bucket === "Overdue";
+    }).length;
+
+    const heavy = active.filter((t) => (t.difficulty ?? 0) >= 4).length;
+
+    // Upcoming exam
+    const examTypes = new Set(["exam", "midterm", "final", "quiz"]);
+    const upcomingExam = active.find((t) => examTypes.has(t.type));
+
+    // Start now count
+    let startNow = 0;
+    for (const task of parentTasks) {
+      if (task.status === "done" || !task.milestones) continue;
+      if (!isPrepWindowOpen(task)) continue;
+      const action = getNextAction(task);
+      if (action && action.active) startNow++;
+    }
+
+    return { today, thisWeek, upcomingExam, startNow, heavy };
+  }, [tasks, parentTasks]);
+
   const activeCount = tasks.filter((t) => t.status !== "done").length;
 
   if (loading) {
     return (
       <>
         <header className="page-header">
-          <h1 className="page-title">Semester Schedule</h1>
+          <h1 className="page-title">Task Ledger</h1>
         </header>
         <div className="database-view">
-          <p className="cell-placeholder" style={{ padding: 40 }}>Loading your semester...</p>
+          <p className="cell-placeholder" style={{ padding: 40 }}>Loading...</p>
         </div>
       </>
     );
@@ -212,16 +305,54 @@ export default function SemesterSchedulePage() {
   return (
     <>
       <header className="page-header">
-        <h1 className="page-title">Semester Schedule</h1>
+        <h1 className="page-title">Task Ledger</h1>
         <button className="btn-primary" type="button" onClick={() => setModalOpen(true)}>
           + New task
         </button>
       </header>
 
+      {/* Dashboard summary cards */}
+      <div className="dashboard-summary">
+        <SummaryCard
+          label="Today"
+          value={summary.today}
+          detail={summary.today === 0 ? "Nothing due today" : `${summary.today} task${summary.today !== 1 ? "s" : ""} due`}
+          detailClass={summary.today > 0 ? "urgent" : "safe"}
+        />
+        <SummaryCard
+          label="What Matters"
+          value={summary.thisWeek}
+          detail="Active this week"
+        />
+        <SummaryCard
+          label="Upcoming Exams"
+          value={summary.upcomingExam ? formatDate(summary.upcomingExam.dueDate) : "—"}
+          detail={summary.upcomingExam ? summary.upcomingExam.title : "No exams coming up"}
+          accentValue={!!summary.upcomingExam}
+        />
+        <SummaryCard
+          label="Start Now"
+          value={summary.startNow}
+          detail="Tasks with open prep windows"
+          detailClass={summary.startNow > 0 ? "urgent" : undefined}
+        />
+        <SummaryCard
+          label="Review Needed"
+          value={reviewCount}
+          detail={reviewCount === 0 ? "All caught up" : `${reviewCount} item${reviewCount !== 1 ? "s" : ""} awaiting review`}
+          detailClass={reviewCount > 0 ? "urgent" : "safe"}
+        />
+        <SummaryCard
+          label="Heavy"
+          value={summary.heavy}
+          detail="Tasks with difficulty ≥ 4"
+        />
+      </div>
+
       <div className="database-view">
         <div className="database-toolbar">
           <div className="database-toolbar__left">
-            <span className="database-toolbar__title">All semester tasks</span>
+            <span className="database-toolbar__title">All tasks</span>
             <span className="database-toolbar__count">· {activeCount} active, {tasks.length} total</span>
           </div>
         </div>
@@ -239,9 +370,10 @@ export default function SemesterSchedulePage() {
                 <tr>
                   <th style={{ width: 36 }}></th>
                   <th>Task</th>
-                  <th>Course</th>
                   <th>Due</th>
+                  <th>Start by</th>
                   <th>Type</th>
+                  <th>Difficulty</th>
                   <th>Urgency</th>
                 </tr>
               </thead>
@@ -249,9 +381,10 @@ export default function SemesterSchedulePage() {
                 {tasks.map((task) => {
                   const isDone = task.status === "done";
                   const urgency = getTaskUrgency(task.dueDate, task.status);
+                  const isMilestone = task.isMilestone;
 
                   return (
-                    <tr key={task.id} className={isDone ? "db-table-row--done" : ""}>
+                    <tr key={task.id} className={`${isDone ? "db-table-row--done" : ""}${isMilestone ? " db-table-row--milestone" : ""}`}>
                       <td>
                         <input
                           type="checkbox"
@@ -262,14 +395,19 @@ export default function SemesterSchedulePage() {
                         />
                       </td>
                       <td>
-                        <span className="cell-task">{task.title}</span>
+                        <span className={`cell-task${isMilestone ? " cell-task--milestone" : ""}`}>{task.title}</span>
                         {task.isOccurrence && <span className="tag tag--gray" style={{ marginLeft: 6, fontSize: 10 }}>recurring</span>}
-                      </td>
-                      <td>
-                        <span className="review-card__course">{task.course || "—"}</span>
+                        {task.course && task.course !== "—" && !isMilestone && (
+                          <span className="cell-course-badge">{task.course}</span>
+                        )}
+                        {isMilestone && task.milestoneWhy && (
+                          <span className="cell-why-hint">{task.milestoneWhy}</span>
+                        )}
                       </td>
                       <td className="cell-date">{formatDate(task.dueDate)}</td>
-                      <td><TypeTag type={task.type} /></td>
+                      <td className="cell-date cell-date--start">{!isMilestone && task.startByDate ? formatDate(task.startByDate) : ""}</td>
+                      <td>{!isMilestone && <TypeTag type={task.type} />}</td>
+                      <td>{!isMilestone && <DifficultyDots value={task.difficulty} />}</td>
                       <td><UrgencyTag urgency={urgency} /></td>
                     </tr>
                   );
