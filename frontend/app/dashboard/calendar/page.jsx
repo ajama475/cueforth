@@ -46,6 +46,17 @@ function formatDateShort(isoDate) {
   }).format(new Date(`${isoDate}T00:00:00`));
 }
 
+function sameMonth(isoDate, year, month) {
+  const date = new Date(`${isoDate}T00:00:00`);
+  return date.getFullYear() === year && date.getMonth() === month;
+}
+
+function itemPriority(item) {
+  if (!item._isMilestone && !item._isStartBy) return 0;
+  if (item._isStartBy) return 1;
+  return 2;
+}
+
 /* Calendar event cell item */
 function CalendarEvent({ task, isMilestone, onClick, isStartBy }) {
   const isDone = task.status === "done";
@@ -60,15 +71,19 @@ function CalendarEvent({ task, isMilestone, onClick, isStartBy }) {
   ].filter(Boolean).join(" ");
 
   return (
-    <div
+    <button
+      type="button"
       className={classes}
       title={`${isMilestone ? "[Prep] " : isStartBy ? "[Start by] " : ""}${task.title}`}
-      onClick={() => onClick(task)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick(task);
+      }}
     >
       {isStartBy && <span className="calendar-event__start-icon">▸</span>}
       {isMilestone && <span className="calendar-event__ms-icon">↳</span>}
       <span className="calendar-event__label">{isMilestone ? task._msLabel : task.title}</span>
-    </div>
+    </button>
   );
 }
 
@@ -81,7 +96,10 @@ function DayPanel({ dateIso, items, onClose, onToggle }) {
   return (
     <div className="calendar-panel">
       <div className="calendar-panel__header">
-        <h3 className="calendar-panel__date">{formatTitle}</h3>
+        <div>
+          <h3 className="calendar-panel__date">{formatTitle}</h3>
+          <p className="calendar-panel__count">{items.length} scheduled item{items.length !== 1 ? "s" : ""}</p>
+        </div>
         <button className="modal__close" onClick={onClose} aria-label="Close panel">×</button>
       </div>
       <div className="calendar-panel__list">
@@ -134,8 +152,7 @@ function DayPanel({ dateIso, items, onClose, onToggle }) {
 
                 {!item._isMilestone && !isDone && (
                   <button
-                    className="btn-ghost"
-                    style={{ fontSize: 12, padding: "2px 6px", marginTop: 4 }}
+                    className="calendar-panel__action"
                     onClick={() => onToggle(item)}
                   >
                     Mark done
@@ -182,6 +199,14 @@ export default function CalendarPage() {
   function goToday() {
     setViewYear(today.getFullYear());
     setViewMonth(today.getMonth());
+    setSelectedDate(formatISO(today));
+  }
+
+  function selectDate(isoDate) {
+    const date = new Date(`${isoDate}T00:00:00`);
+    setViewYear(date.getFullYear());
+    setViewMonth(date.getMonth());
+    setSelectedDate(isoDate);
   }
 
   // Build a date → items map that includes:
@@ -251,7 +276,21 @@ export default function CalendarPage() {
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const todayIso = formatISO(today);
 
-  const selectedItems = selectedDate ? (dateMap[selectedDate] || []) : [];
+  const selectedItems = selectedDate ? [...(dateMap[selectedDate] || [])].sort((a, b) => itemPriority(a) - itemPriority(b)) : [];
+
+  const monthItems = Object.entries(dateMap)
+    .filter(([iso]) => sameMonth(iso, viewYear, viewMonth))
+    .flatMap(([iso, items]) => items.map((item) => ({ ...item, _dateIso: iso })))
+    .sort((a, b) => a._dateIso.localeCompare(b._dateIso) || itemPriority(a) - itemPriority(b));
+
+  const upcomingItems = Object.entries(dateMap)
+    .filter(([iso]) => iso >= todayIso)
+    .flatMap(([iso, items]) => items.map((item) => ({ ...item, _dateIso: iso })))
+    .sort((a, b) => a._dateIso.localeCompare(b._dateIso) || itemPriority(a) - itemPriority(b))
+    .slice(0, 5);
+
+  const monthDeadlineCount = monthItems.filter((item) => !item._isMilestone && !item._isStartBy).length;
+  const monthPrepCount = monthItems.length - monthDeadlineCount;
 
   return (
     <>
@@ -262,13 +301,42 @@ export default function CalendarPage() {
       <div className={`calendar-layout${selectedDate ? " calendar-layout--panel-open" : ""}`}>
         <div className="calendar-view">
           <div className="calendar-header">
-            <h2 className="calendar-title">{monthName} {viewYear}</h2>
+            <div>
+              <h2 className="calendar-title">{monthName} {viewYear}</h2>
+              <p className="calendar-subtitle">{monthDeadlineCount} deadlines · {monthPrepCount} prep markers</p>
+            </div>
             <div className="calendar-nav">
               <button className="btn-ghost" onClick={goToday}>Today</button>
-              <button className="btn-ghost" onClick={goPrev} aria-label="Previous month" style={{ padding: "0 8px" }}>←</button>
-              <button className="btn-ghost" onClick={goNext} aria-label="Next month" style={{ padding: "0 8px" }}>→</button>
+              <button className="calendar-nav__icon" onClick={goPrev} aria-label="Previous month">←</button>
+              <button className="calendar-nav__icon" onClick={goNext} aria-label="Next month">→</button>
             </div>
           </div>
+
+          <section className="calendar-agenda" aria-label="Upcoming calendar items">
+            <div className="calendar-agenda__header">
+              <span>Next up</span>
+            </div>
+            <div className="calendar-agenda__rail">
+              {upcomingItems.length > 0 ? (
+                upcomingItems.map((item) => (
+                  <button
+                    key={`${item._key}-${item._dateIso}`}
+                    type="button"
+                    className="calendar-agenda__item"
+                    onClick={() => selectDate(item._dateIso)}
+                  >
+                    <span className="calendar-agenda__date">{formatDateShort(item._dateIso)}</span>
+                    <span className="calendar-agenda__title">{item._isMilestone ? item._msLabel : item.title}</span>
+                    <span className={`calendar-agenda__kind${item._isMilestone ? " calendar-agenda__kind--prep" : item._isStartBy ? " calendar-agenda__kind--start" : ""}`}>
+                      {item._isMilestone ? "Prep" : item._isStartBy ? "Start" : "Due"}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <span className="calendar-agenda__empty">No upcoming items.</span>
+              )}
+            </div>
+          </section>
 
           <div className="calendar-grid">
             {weekDays.map((day) => (
@@ -286,26 +354,45 @@ export default function CalendarPage() {
               const deadlines = dayItems.filter((it) => !it._isMilestone && !it._isStartBy);
               const milestones = dayItems.filter((it) => it._isMilestone);
               const startBys = dayItems.filter((it) => it._isStartBy);
+              const sortedItems = [...dayItems].sort((a, b) => itemPriority(a) - itemPriority(b));
 
               return (
                 <div
+                  role="button"
+                  tabIndex={0}
                   key={iso + i}
                   className={`calendar-cell${isOther ? " calendar-cell--other-month" : ""}${isToday ? " calendar-cell--today" : ""}${isSelected ? " calendar-cell--selected" : ""}`}
                   onClick={() => setSelectedDate(iso === selectedDate ? null : iso)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedDate(iso === selectedDate ? null : iso);
+                    }
+                  }}
                 >
-                  <div className="calendar-cell__date">{dateObj.getDate()}</div>
+                  <div className="calendar-cell__top">
+                    <span className="calendar-cell__date">{dateObj.getDate()}</span>
+                    {dayItems.length > 0 && <span className="calendar-cell__count">{dayItems.length}</span>}
+                  </div>
+                  {dayItems.length > 0 && (
+                    <div className="calendar-cell__density" aria-hidden="true">
+                      {deadlines.length > 0 && <span className="calendar-cell__density-deadline" style={{ flex: deadlines.length }} />}
+                      {startBys.length > 0 && <span className="calendar-cell__density-start" style={{ flex: startBys.length }} />}
+                      {milestones.length > 0 && <span className="calendar-cell__density-prep" style={{ flex: milestones.length }} />}
+                    </div>
+                  )}
                   <div className="calendar-cell__events">
-                    {deadlines.slice(0, 3).map((item) => (
+                    {deadlines.slice(0, 2).map((item) => (
                       <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={false} onClick={() => setSelectedDate(iso)} />
                     ))}
-                    {startBys.slice(0, 2).map((item) => (
+                    {startBys.slice(0, 1).map((item) => (
                       <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={true} onClick={() => setSelectedDate(iso)} />
                     ))}
-                    {milestones.slice(0, 2).map((item) => (
+                    {milestones.slice(0, 1).map((item) => (
                       <CalendarEvent key={item._key} task={item} isMilestone={true} isStartBy={false} onClick={() => setSelectedDate(iso)} />
                     ))}
-                    {dayItems.length > 5 && (
-                      <div className="calendar-cell__more">+{dayItems.length - 5} more</div>
+                    {sortedItems.length > 4 && (
+                      <div className="calendar-cell__more">+{sortedItems.length - 4} more</div>
                     )}
                   </div>
                 </div>

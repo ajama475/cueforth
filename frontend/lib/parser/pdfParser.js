@@ -117,6 +117,7 @@ if (typeof window !== "undefined") {
  * @property {string} matchedDateText
  * @property {string[]} matchedKeywords
  * @property {SectionHint} sectionHint
+ * @property {number | null} difficulty
  * @property {ParserReason[]} reasons
  * @property {{ left: number, top: number, width: number, height: number }} sourceBounds
  */
@@ -249,11 +250,16 @@ const TABLE_HEADER_PATTERNS = [
   /\bweight\b/gi,
 ];
 
+// We use explicit regex patterns instead of LLMs to parse dates to ensure 
+// it is fast, deterministic, and works 100% locally in the browser.
+
 const MONTH_NAME_PATTERN =
   "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 
 const WEEKDAY_PATTERN =
   "(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thu(?:rs)?|fri|sat|sun)";
+
+/* ---- Text normalization helpers ---- */
 
 function normalizeWhitespace(value) {
   return value.replace(/\s+/g, " ").trim();
@@ -335,13 +341,21 @@ function parseSemesterDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getSemesterStartISO(semester) {
+  return semester?.startDateISO || semester?.startDate;
+}
+
+function getSemesterEndISO(semester) {
+  return semester?.endDateISO || semester?.endDate;
+}
+
 /**
  * @param {string} isoDate
  * @param {SemesterAnchor | undefined} semester
  */
 function isWithinSemester(isoDate, semester) {
-  const start = parseSemesterDate(semester?.startDateISO);
-  const end = parseSemesterDate(semester?.endDateISO);
+  const start = parseSemesterDate(getSemesterStartISO(semester));
+  const end = parseSemesterDate(getSemesterEndISO(semester));
   if (!start || !end) return null;
 
   const date = parseSemesterDate(isoDate);
@@ -360,8 +374,8 @@ function resolveYear(month, day, explicitYear, semester) {
     return explicitYear;
   }
 
-  const start = parseSemesterDate(semester?.startDateISO);
-  const end = parseSemesterDate(semester?.endDateISO);
+  const start = parseSemesterDate(getSemesterStartISO(semester));
+  const end = parseSemesterDate(getSemesterEndISO(semester));
   const nowYear = new Date().getFullYear();
   const candidateYears = Array.from(
     new Set([semester?.defaultYear, start?.getUTCFullYear(), end?.getUTCFullYear(), nowYear, nowYear + 1].filter(Boolean))
@@ -376,6 +390,29 @@ function resolveYear(month, day, explicitYear, semester) {
   }
 
   return candidateYears[0] ?? nowYear;
+}
+
+/**
+ * @param {AcademicTaskType} type
+ */
+function inferDifficulty(type) {
+  switch (type) {
+    case "final":
+    case "exam":
+    case "midterm":
+    case "project":
+      return 5;
+    case "presentation":
+    case "assignment":
+      return 4;
+    case "lab":
+    case "quiz":
+      return 3;
+    case "reading":
+      return 2;
+    default:
+      return null;
+  }
 }
 
 function containsSignal(text, signal) {
@@ -490,6 +527,19 @@ function classifySectionHint(text) {
  */
 function extractDateMatches(text, semester) {
   const matches = [];
+  const occupiedRanges = [];
+
+  function hasDateRangeOverlap(index, rawText) {
+    const start = index;
+    const end = index + rawText.length;
+    return occupiedRanges.some((range) => start < range.end && end > range.start);
+  }
+
+  function addDateMatch(rawText, isoDate, index, kind) {
+    if (hasDateRangeOverlap(index, rawText)) return;
+    occupiedRanges.push({ start: index, end: index + rawText.length });
+    matches.push({ rawText, isoDate, index, kind });
+  }
 
   const monthFirst = new RegExp(
     `\\b(?:${WEEKDAY_PATTERN}\\s*,?\\s+)?(${MONTH_NAME_PATTERN})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s*[-–]\\s*(\\d{1,2})(?:st|nd|rd|th)?)?(?:,?\\s*(\\d{2,4}))?\\b`,
@@ -511,12 +561,7 @@ function extractDateMatches(text, semester) {
     const isoDate = safeISODate(year, month, day);
     if (!isoDate) continue;
 
-    matches.push({
-      rawText: match[0],
-      isoDate,
-      index: match.index,
-      kind: "month_first",
-    });
+    addDateMatch(match[0], isoDate, match.index, "month_first");
   }
 
   while ((match = dayFirst.exec(text)) !== null) {
@@ -527,12 +572,7 @@ function extractDateMatches(text, semester) {
     const isoDate = safeISODate(year, month, day);
     if (!isoDate) continue;
 
-    matches.push({
-      rawText: match[0],
-      isoDate,
-      index: match.index,
-      kind: "day_first",
-    });
+    addDateMatch(match[0], isoDate, match.index, "day_first");
   }
 
   while ((match = numeric.exec(text)) !== null) {
@@ -543,12 +583,7 @@ function extractDateMatches(text, semester) {
     const isoDate = safeISODate(year, month, day);
     if (!isoDate) continue;
 
-    matches.push({
-      rawText: match[0],
-      isoDate,
-      index: match.index,
-      kind: "numeric",
-    });
+    addDateMatch(match[0], isoDate, match.index, "numeric");
   }
 
   return matches.sort((a, b) => a.index - b.index);
@@ -731,6 +766,8 @@ function buildCandidateWindows(lines, semester) {
  * @param {string[]} matchedKeywords
  * @param {SemesterAnchor | undefined} semester
  */
+// The core scoring engine. It assigns weights based on how strong the signals are.
+// Hard matches (like explicit "Due" signals) add heavily, while policy section hints heavily subtract.
 function scoreCandidate(window, dateMatch, title, type, matchedKeywords, semester) {
   const reasons = [];
   let score = 26;
@@ -887,7 +924,17 @@ function dedupeCandidates(candidates) {
       if (existing.dueDateISO !== candidate.dueDateISO) return false;
       
       const overlaps = Math.max(0, Math.min(existing.sourceIndexEnd, candidate.sourceIndexEnd) - Math.max(existing.sourceIndexStart, candidate.sourceIndexStart)) > 0;
-      if (overlaps) return true;
+      if (overlaps) {
+        const sameDateText = existing.matchedDateText === candidate.matchedDateText;
+        const sameSourceWindow =
+          existing.sourceIndexStart === candidate.sourceIndexStart &&
+          existing.sourceIndexEnd === candidate.sourceIndexEnd;
+
+        return (
+          (existing.type === candidate.type && titlesLookEquivalent(existing.title, candidate.title)) ||
+          (sameSourceWindow && sameDateText)
+        );
+      }
 
       if (existing.type !== candidate.type) return false;
       return titlesLookEquivalent(existing.title, candidate.title);
@@ -952,6 +999,18 @@ function toTextRuns(items) {
 function isSameLine(previous, current) {
   const lineTolerance = Math.max(2, Math.min(Math.abs(previous.height) || 8, Math.abs(current.height) || 8) * 0.6);
   return Math.abs(previous.y - current.y) <= lineTolerance;
+}
+
+/**
+ * @param {TextRun[]} runs
+ */
+function sortRunsForReadingOrder(runs) {
+  return [...runs].sort((first, second) => {
+    if (isSameLine(first, second)) {
+      return first.x - second.x;
+    }
+    return second.y - first.y;
+  });
 }
 
 /**
@@ -1020,25 +1079,28 @@ function groupRunsIntoLines(runs) {
 
 /**
  * @param {TextRun[]} runs
+ * @param {number} pageWidth
  * @param {number} pageHeight
  */
-function getLineBounds(runs, pageHeight) {
+function getLineBounds(runs, pageWidth, pageHeight) {
   const boxes = runs.map((run) => {
     const height = Math.max(Math.abs(run.height) || 0, 10);
-    const top = pageHeight - run.y - height;
+    const width = Math.max(Math.abs(run.width) || 0, 6);
+    const top = clamp(pageHeight - run.y - height, 0, pageHeight);
+    const left = clamp(run.x, 0, pageWidth);
 
     return {
-      left: run.x,
+      left,
       top,
-      width: Math.max(run.width || 0, 6),
+      width: Math.min(width, Math.max(0, pageWidth - left)),
       height,
     };
   });
 
-  const left = Math.min(...boxes.map((box) => box.left));
-  const top = Math.min(...boxes.map((box) => box.top));
-  const right = Math.max(...boxes.map((box) => box.left + box.width));
-  const bottom = Math.max(...boxes.map((box) => box.top + box.height));
+  const left = clamp(Math.min(...boxes.map((box) => box.left)), 0, pageWidth);
+  const top = clamp(Math.min(...boxes.map((box) => box.top)), 0, pageHeight);
+  const right = clamp(Math.max(...boxes.map((box) => box.left + box.width)), left, pageWidth);
+  const bottom = clamp(Math.max(...boxes.map((box) => box.top + box.height)), top, pageHeight);
 
   return {
     left,
@@ -1095,6 +1157,7 @@ export function extractAcademicTasks(result, options = {}) {
         matchedDateText: dateMatch.rawText,
         matchedKeywords,
         sectionHint: window.sectionHint,
+        difficulty: inferDifficulty(type),
         reasons: scored.reasons,
         sourceBounds: window.bounds,
       });
@@ -1113,22 +1176,23 @@ export async function parsePDF(file) {
     const arrayBuffer = await file.arrayBuffer();
     const documentParams = {
       data: arrayBuffer,
-      disableWorker: true,
+      disableWorker: typeof window === "undefined",
     };
 
     const loadingTask = pdfjs.getDocument(documentParams);
     const pdf = await loadingTask.promise;
+    const pageCount = pdf.numPages;
 
     let fullText = "";
     const pages = [];
     const chunks = [];
     const warnings = [];
 
-    for (let i = 1; i <= pdf.numPages; i++) {
+    for (let i = 1; i <= pageCount; i++) {
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale: 1 });
       const textContent = await page.getTextContent();
-      const runs = toTextRuns(textContent.items);
+      const runs = sortRunsForReadingOrder(toTextRuns(textContent.items));
       const lineRuns = groupRunsIntoLines(runs);
       const pageIndexStart = fullText.length;
       const pageLines = [];
@@ -1136,7 +1200,7 @@ export async function parsePDF(file) {
       for (const runGroup of lineRuns) {
         const lineText = joinLineRuns(runGroup);
         if (!lineText) continue;
-        const bounds = getLineBounds(runGroup, viewport.height);
+        const bounds = getLineBounds(runGroup, viewport.width, viewport.height);
 
         const indexStart = fullText.length;
         fullText += `${lineText}\n`;
@@ -1193,14 +1257,22 @@ export async function parsePDF(file) {
       });
     }
 
-    return {
+    const result = {
       text: fullText,
       pages,
       chunks,
       warnings,
       hasExtractableText,
-      metadata: { pages: pdf.numPages },
+      metadata: { pages: pageCount },
     };
+
+    if (typeof pdf.destroy === "function") {
+      try {
+        await pdf.destroy();
+      } catch {}
+    }
+
+    return result;
   } catch (error) {
     console.error("PDF Parsing Error:", error);
     throw error;

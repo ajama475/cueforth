@@ -37,11 +37,11 @@ function TaskCard({ task, onToggle }) {
         <div className="horizon-card__meta">
           <span className="horizon-card__course">{task.course || "—"}</span>
           {!isDone && urgency.color === "red" && (
-            <span className={`tag tag--${urgency.color}`} style={{ padding: "0 4px", height: "16px", fontSize: "10px" }}>
+            <span className={`tag tag--${urgency.color} horizon-card__urgency`}>
               {urgency.label}
             </span>
           )}
-          <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{formatDate(task.dueDate)}</span>
+          <span className="horizon-card__date">{formatDate(task.dueDate)}</span>
         </div>
       </div>
     </div>
@@ -85,7 +85,7 @@ function BucketColumn({ title, tasks, onToggle }) {
             <TaskCard key={task.id} task={task} onToggle={onToggle} />
           ))
         ) : (
-          <p style={{ textAlign: "center", padding: "16px 0", color: "var(--text-tertiary)", fontSize: 13 }}>
+          <p className="horizon-bucket__empty">
             Nothing here
           </p>
         )}

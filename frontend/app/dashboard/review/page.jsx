@@ -8,7 +8,7 @@ import {
   listSyllabusRecords,
   patchSyllabusRecord,
 } from "../../../lib/storage/syllabusStore";
-import { generateMilestones, readSetup } from "../../../lib/tasks/taskHelpers";
+import { generateMilestones, readSetup, courseLabel, extractCourseCode } from "../../../lib/tasks/taskHelpers";
 
 const SETUP_STORAGE_KEY = "sys-semester-setup";
 
@@ -82,6 +82,16 @@ function IconZoomOut() {
   );
 }
 
+function IconAlert() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
 /* ---- Helpers ---- */
 
 function confidenceClass(score) {
@@ -108,7 +118,6 @@ function formatDueDate(dateString) {
 function stripExtension(filename) {
   return filename.replace(/\.[^/.]+$/, "");
 }
-
 function readSetupCourses() {
   try {
     const raw = localStorage.getItem(SETUP_STORAGE_KEY);
@@ -120,13 +129,6 @@ function readSetupCourses() {
   }
 }
 
-function courseLabel(courseId, courses, filename) {
-  const course = courses.find((entry) => entry.id === courseId);
-  if (!course) return stripExtension(filename);
-  if (course.code) return course.code;
-  return course.code || course.name || stripExtension(filename);
-}
-
 function itemStatusText(status) {
   if (status === "approved") return "Approved";
   if (status === "rejected") return "Rejected";
@@ -135,6 +137,100 @@ function itemStatusText(status) {
 
 function updateNestedItem(items, itemId, updater) {
   return items.map((item) => (item.id === itemId ? updater(item) : item));
+}
+
+function DifficultyDots({ value = 0, onChange = null }) {
+  const numericValue = Number(value) || 0;
+  const interactive = typeof onChange === "function";
+
+  return (
+    <span className={`dots${interactive ? " dots--input" : ""}`} aria-label={`Difficulty ${numericValue} of 5`}>
+      {[1, 2, 3, 4, 5].map((dot) => {
+        const className = `dots__dot${interactive ? " dots__dot--clickable" : ""}${dot <= numericValue ? " dots__dot--filled" : ""}`;
+
+        if (!interactive) {
+          return <span key={dot} className={className} />;
+        }
+
+        return (
+          <button
+            key={dot}
+            type="button"
+            className={className}
+            aria-label={`Set difficulty to ${dot}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange(dot === numericValue ? 0 : dot);
+            }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+function buildConflictGroups(items) {
+  const groupsByDate = new Map();
+
+  for (const item of items) {
+    if (!item.dueDateRaw || (item.difficulty ?? 0) <= 4) continue;
+    if (item.status === "rejected" || item.status === "done") continue;
+
+    const existing = groupsByDate.get(item.dueDateRaw) || [];
+    existing.push(item);
+    groupsByDate.set(item.dueDateRaw, existing);
+  }
+
+  return [...groupsByDate.entries()]
+    .map(([date, groupItems]) => ({
+      date,
+      items: groupItems,
+      recordCount: new Set(groupItems.map((item) => item.recordId)).size,
+    }))
+    .filter((group) => group.items.length >= 2 && group.recordCount >= 2)
+    .sort((first, second) => first.date.localeCompare(second.date));
+}
+
+function ConflictWarnings({ groups, onSelect }) {
+  if (groups.length === 0) return null;
+
+  return (
+    <section className="review-conflicts" aria-label="Major deadline conflicts">
+      <div className="review-conflicts__header">
+        <span className="review-conflicts__icon"><IconAlert /></span>
+        <div>
+          <h3 className="review-conflicts__title">Major deadline conflict</h3>
+          <p className="review-conflicts__count">
+            {groups.length} same-day cluster{groups.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="review-conflicts__list">
+        {groups.map((group) => (
+          <div key={group.date} className="review-conflict">
+            <div className="review-conflict__date">{formatDueDate(group.date)}</div>
+            <div className="review-conflict__items">
+              {group.items.slice(0, 3).map((item) => (
+                <button
+                  key={item.clientId}
+                  type="button"
+                  className="review-conflict__item"
+                  onClick={() => onSelect(item.clientId)}
+                >
+                  <span className="review-conflict__course">{item.course}</span>
+                  <span className="review-conflict__title">{item.title}</span>
+                </button>
+              ))}
+              {group.items.length > 3 && (
+                <span className="review-conflict__more">+{group.items.length - 3} more</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 /* ---- Render snippet with highlights ---- */
@@ -168,8 +264,12 @@ function SnippetText({ text, terms }) {
 }
 
 /* ---- PDF viewer ---- */
+// This component displays the original PDF page to give the user context for the extracted deadline.
+// It uses pdf.js to render a canvas and overlays a highlight box over the exact source bounds.
 
-function PdfViewer({ record, selectedItem, currentPage, zoom }) {
+function PdfViewer({ record, selectedItem, currentPage, zoom, onCreateSnipTask }) {
+  const containerRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const canvasRef = useRef(null);
   const pdfCacheRef = useRef(new Map());
   const renderTaskRef = useRef(null);
@@ -179,6 +279,17 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
     width: 0,
     height: 0,
   });
+
+  const [snipStart, setSnipStart] = useState(null);
+  const [snipCurrent, setSnipCurrent] = useState(null);
+  const [snipFinal, setSnipFinal] = useState(null);
+
+  // Clear snip if page or record changes
+  useEffect(() => {
+    setSnipStart(null);
+    setSnipCurrent(null);
+    setSnipFinal(null);
+  }, [record, currentPage]);
 
   const currentPageData = useMemo(
     () => record?.parseResult?.pages?.find((page) => page.pageNumber === currentPage) ?? null,
@@ -205,6 +316,7 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
       try {
         let pdfDocument = pdfCacheRef.current.get(record.id);
 
+        // Fetch and load the PDF document if it isn't already cached.
         if (!pdfDocument) {
           pdfDocument = await loadPdfDocument(record.fileBlob);
           if (didCancel) return;
@@ -274,26 +386,113 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
   }, [record, currentPage, zoom]);
 
   const highlight =
-    selectedItem && currentPage === selectedItem.sourcePage
+    selectedItem && currentPage === (selectedItem.sourcePage || selectedItem.pageNumber || 1)
       ? selectedItem.sourceBounds
       : null;
+
+  // Auto-scroll to highlight
+  useEffect(() => {
+    if (!renderState.loading && highlight && scrollContainerRef.current) {
+      // Small delay to ensure canvas layout has settled
+      setTimeout(() => {
+        if (!scrollContainerRef.current) return;
+        const container = scrollContainerRef.current;
+        const targetY = (highlight.top * zoom) - (container.clientHeight / 2) + (highlight.height * zoom / 2);
+        
+        container.scrollTo({
+          top: Math.max(0, targetY),
+          behavior: "smooth"
+        });
+      }, 50);
+    }
+  }, [highlight, renderState.loading, zoom]);
 
   const frameWidth = renderState.width || (currentPageData ? currentPageData.width * zoom : 0);
   const frameHeight = renderState.height || (currentPageData ? currentPageData.height * zoom : 0);
 
+  function handleMouseDown(e) {
+    if (!containerRef.current || e.target.closest(".review-pdf__snip-btn")) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setSnipFinal(null);
+    setSnipStart({ x, y });
+    setSnipCurrent({ x, y });
+  }
+
+  function handleMouseMove(e) {
+    if (!snipStart || !containerRef.current || snipFinal) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+    setSnipCurrent({ x, y });
+  }
+
+  function handleMouseUp() {
+    if (!snipStart || !snipCurrent || snipFinal) return;
+    
+    // Require a minimum drag distance to prevent accidental drops
+    const w = Math.abs(snipCurrent.x - snipStart.x);
+    const h = Math.abs(snipCurrent.y - snipStart.y);
+    if (w < 10 || h < 10) {
+      setSnipStart(null);
+      setSnipCurrent(null);
+      return;
+    }
+    
+    setSnipFinal({
+      x: Math.min(snipStart.x, snipCurrent.x),
+      y: Math.min(snipStart.y, snipCurrent.y),
+      w,
+      h,
+    });
+  }
+
+  function handleConfirmSnip() {
+    if (!snipFinal) return;
+    onCreateSnipTask({
+      left: snipFinal.x / zoom,
+      top: snipFinal.y / zoom,
+      width: snipFinal.w / zoom,
+      height: snipFinal.h / zoom,
+    });
+    setSnipStart(null);
+    setSnipCurrent(null);
+    setSnipFinal(null);
+  }
+
+  // Determine what snip region to draw (either during drag or final)
+  let activeSnip = null;
+  if (snipFinal) {
+    activeSnip = snipFinal;
+  } else if (snipStart && snipCurrent) {
+    activeSnip = {
+      x: Math.min(snipStart.x, snipCurrent.x),
+      y: Math.min(snipStart.y, snipCurrent.y),
+      w: Math.abs(snipCurrent.x - snipStart.x),
+      h: Math.abs(snipCurrent.y - snipStart.y),
+    };
+  }
+
   return (
-    <div className="review-pdf__canvas">
+    <div className="review-pdf__canvas" ref={scrollContainerRef}>
       {!record ? (
         <div className="review-pdf__empty">
           <p>Select an item from the review queue to see its source.</p>
         </div>
       ) : (
         <div
+          ref={containerRef}
           className="review-pdf__page-frame"
           style={{
             width: frameWidth || undefined,
             minHeight: frameHeight || undefined,
+            cursor: "crosshair"
           }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
         >
           <canvas ref={canvasRef} className="review-pdf__canvas-element" />
 
@@ -307,6 +506,27 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
                 height: `${Math.max(highlight.height * zoom, 18)}px`,
               }}
             />
+          )}
+
+          {activeSnip && (
+            <div
+              className={`review-pdf__highlight-box review-pdf__highlight-box--snip${snipFinal ? " review-pdf__highlight-box--snip-final" : ""}`}
+              style={{
+                left: `${activeSnip.x}px`,
+                top: `${activeSnip.y}px`,
+                width: `${activeSnip.w}px`,
+                height: `${activeSnip.h}px`,
+              }}
+            >
+              {snipFinal && (
+                <button 
+                  className="btn-primary review-pdf__snip-btn"
+                  onClick={handleConfirmSnip}
+                >
+                  Create task from selection
+                </button>
+              )}
+            </div>
           )}
 
           {renderState.loading && (
@@ -326,7 +546,7 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
             {currentPageData.lines.map((line) => {
               const isSelectedLine =
                 selectedItem &&
-                currentPage === selectedItem.sourcePage &&
+                currentPage === (selectedItem.sourcePage || selectedItem.pageNumber || 1) &&
                 line.indexStart < selectedItem.sourceIndexEnd &&
                 line.indexEnd > selectedItem.sourceIndexStart;
 
@@ -347,16 +567,20 @@ function PdfViewer({ record, selectedItem, currentPage, zoom }) {
 }
 
 /* ---- Page ---- */
+// The main review interface where students approve or reject the tasks the parser found.
+// It manages the queue of pending tasks and controls what page the PDF viewer is on.
 
 function ReviewPageContent() {
   const searchParams = useSearchParams();
   const requestedFileId = searchParams.get("file");
 
+  // State for raw data from our stores
   const [records, setRecords] = useState([]);
   const [courses, setCourses] = useState([]);
+  // UI State: track what is selected, what is being edited, and the view layer zoom/page
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({ title: "", dueDate: "" });
+  const [editDraft, setEditDraft] = useState({ title: "", dueDate: "", difficulty: 0 });
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(1);
 
@@ -379,6 +603,7 @@ function ReviewPageContent() {
     };
   }, []);
 
+  // Flatten the review items from all records into a single queue.
   const items = useMemo(
     () =>
       records.flatMap((record) =>
@@ -396,6 +621,11 @@ function ReviewPageContent() {
 
   const pendingItems = useMemo(
     () => items.filter((item) => item.status === "pending"),
+    [items]
+  );
+
+  const conflictGroups = useMemo(
+    () => buildConflictGroups(items),
     [items]
   );
 
@@ -427,11 +657,55 @@ function ReviewPageContent() {
     setSelectedId(nextSelected?.clientId ?? null);
   }, [items, pendingItems, requestedFileId, selected]);
 
+  // Whenever the active item changes, jump the PDF to the page where that task was found.
   useEffect(() => {
     if (!selected) return;
-    setCurrentPage(selected.sourcePage);
+    setCurrentPage(selected.sourcePage || selected.pageNumber || 1);
     setZoom(1);
   }, [selected]);
+
+  const handleCreateSnipTask = useCallback(async (bounds) => {
+    if (!selectedRecord) return;
+    
+    const newItem = {
+      id: `snip-${Date.now()}`,
+      title: "Manual Extraction",
+      type: "other",
+      dueDateRaw: null,
+      difficulty: null,
+      confidence: 100,
+      extraction: "manual",
+      snippet: "", // Text extraction requires PDF.js text layer mapping, we skip it for snips.
+      highlightedTerms: [],
+      detectionId: `m-${Date.now().toString().slice(-4)}`,
+      sourcePage: currentPage,
+      sourceBounds: bounds,
+      sourceIndexStart: 0,
+      sourceIndexEnd: 0,
+      matchedDateText: "",
+      matchedKeywords: [],
+      sectionHint: "neutral",
+      reasons: [{ impact: "positive", code: "manual_selection", detail: "Task generated by user snippet selection." }],
+      status: "pending",
+    };
+
+    setRecords((prev) =>
+      prev.map((r) => r.id === selectedRecord.id ? { ...r, reviewItems: [...(r.reviewItems || []), newItem] } : r)
+    );
+
+    try {
+      await patchSyllabusRecord(selectedRecord.id, (r) => ({
+        ...r,
+        reviewItems: [...(r.reviewItems || []), newItem],
+      }));
+      // Automatically select and edit the newly created item
+      setSelectedId(`${selectedRecord.id}:${newItem.id}`);
+      setEditingId(`${selectedRecord.id}:${newItem.id}`);
+      setEditDraft({ title: newItem.title, dueDate: "", difficulty: 0 });
+    } catch (e) {
+      console.error("Failed to add manual snip task.", e);
+    }
+  }, [selectedRecord, currentPage]);
 
   const updateReviewItem = useCallback(async (recordId, itemId, updater) => {
     setRecords((prev) =>
@@ -490,6 +764,7 @@ function ReviewPageContent() {
     setEditDraft({
       title: item.title,
       dueDate: item.dueDateRaw,
+      difficulty: item.difficulty ?? 0,
     });
   }, []);
 
@@ -499,6 +774,7 @@ function ReviewPageContent() {
         ...current,
         title: editDraft.title || current.title,
         dueDateRaw: editDraft.dueDate || current.dueDateRaw,
+        difficulty: editDraft.difficulty || null,
       }));
       setEditingId(null);
     },
@@ -523,8 +799,8 @@ function ReviewPageContent() {
         <div className="review-queue review-queue--empty">
           <div className="review-queue__done">
             <p className="review-queue__done-text">No parsed syllabus items are ready for review yet.</p>
-            <Link href="/dashboard/upload" className="btn-primary">
-              Upload a syllabus
+            <Link href="/dashboard/sources" className="btn-primary">
+              Go to Syllabus Lab
             </Link>
           </div>
         </div>
@@ -549,6 +825,7 @@ function ReviewPageContent() {
           selectedItem={selected}
           currentPage={currentPage}
           zoom={zoom}
+          onCreateSnipTask={handleCreateSnipTask}
         />
 
         {selected && (
@@ -610,6 +887,8 @@ function ReviewPageContent() {
           </div>
         </div>
 
+        <ConflictWarnings groups={conflictGroups} onSelect={setSelectedId} />
+
         <div className="review-queue__list">
           {pendingItems.length === 0 ? (
             <div className="review-queue__done">
@@ -665,7 +944,7 @@ function ReviewPageContent() {
                       <input
                         className="inline-input"
                         type="date"
-                        value={editDraft.dueDate}
+                        value={editDraft.dueDate || ""}
                         onChange={(event) =>
                           setEditDraft((draft) => ({
                             ...draft,
@@ -683,13 +962,28 @@ function ReviewPageContent() {
                     )}
                   </div>
 
+                  <div className="review-card__attributes">
+                    <span className="tag tag--gray">{item.type || "other"}</span>
+                    <div className="review-card__difficulty">
+                      <span>Difficulty</span>
+                      {isEditing ? (
+                        <DifficultyDots
+                          value={editDraft.difficulty}
+                          onChange={(difficulty) => setEditDraft((draft) => ({ ...draft, difficulty }))}
+                        />
+                      ) : (
+                        item.difficulty ? <DifficultyDots value={item.difficulty} /> : <span className="review-card__difficulty-empty">Unset</span>
+                      )}
+                    </div>
+                  </div>
+
                   {isSelected && (
                     <>
                       <div className="review-card__snippet-section">
                         <span className="review-card__snippet-label">Source snippet</span>
                         <p className="review-card__snippet">
                           &ldquo;
-                          <SnippetText text={item.snippet} terms={item.highlightedTerms} />
+                          <SnippetText text={item.snippet || item.sourceText || ""} terms={item.highlightedTerms || []} />
                           &rdquo;
                         </p>
                       </div>
@@ -708,7 +1002,7 @@ function ReviewPageContent() {
                       )}
 
                       <div className="review-card__extraction">
-                        {itemStatusText(item.status)} · page {item.sourcePage}
+                        {itemStatusText(item.status)} · page {item.sourcePage || item.pageNumber || "?"}
                       </div>
 
                       <div className="review-card__actions">

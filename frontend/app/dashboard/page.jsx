@@ -8,11 +8,14 @@ import {
   getTaskBucket,
   isPrepWindowOpen,
   getNextAction,
+  generateMilestones,
   toggleTaskCompletion,
   createTask,
+  updateTask,
+  removeTask,
   readSetup,
 } from "../../lib/tasks/taskHelpers";
-import { listSyllabusRecords } from "../../lib/storage/syllabusStore";
+import { listSyllabusRecords, patchSyllabusRecord } from "../../lib/storage/syllabusStore";
 
 function formatDate(isoDate) {
   if (!isoDate) return "";
@@ -45,7 +48,16 @@ function DifficultyDots({ value }) {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function TaskModal({ open, onClose, onCreated, courses, semester }) {
+function IconTrash() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
+function TaskModal({ open, onClose, onCreated, onSave, onDelete, courses, semester, taskToEdit }) {
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [courseId, setCourseId] = useState("");
@@ -53,16 +65,38 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
   const [difficulty, setDifficulty] = useState(0);
   const [isLoop, setIsLoop] = useState(false);
   const [loopDays, setLoopDays] = useState([]);
-  const [loopStart, setLoopStart] = useState(semester?.startDate || "");
-  const [loopEnd, setLoopEnd] = useState(semester?.endDate || "");
+  const [loopStart, setLoopStart] = useState("");
+  const [loopEnd, setLoopEnd] = useState("");
   const [notes, setNotes] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
+
+  const isEditing = !!taskToEdit;
 
   function reset() {
     setTitle(""); setDueDate(""); setCourseId(""); setType("other");
     setDifficulty(0); setIsLoop(false); setLoopDays([]);
     setLoopStart(semester?.startDate || ""); setLoopEnd(semester?.endDate || "");
     setNotes("");
+    setDeleteArmed(false);
   }
+
+  useEffect(() => {
+    if (taskToEdit) {
+      setTitle(taskToEdit.title || "");
+      setDueDate(taskToEdit.dueDate || "");
+      setCourseId(taskToEdit.courseId || "");
+      setType(taskToEdit.type || "other");
+      setDifficulty(taskToEdit.difficulty || 0);
+      setIsLoop(!!taskToEdit.recurrence);
+      setLoopDays(taskToEdit.recurrence?.days || []);
+      setLoopStart(taskToEdit.recurrence?.startDate || semester?.startDate || "");
+      setLoopEnd(taskToEdit.recurrence?.endDate || semester?.endDate || "");
+      setNotes(taskToEdit.notes || "");
+      setDeleteArmed(false);
+    } else {
+      reset();
+    }
+  }, [taskToEdit, open]);
 
   function toggleDay(day) {
     setLoopDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
@@ -75,7 +109,7 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
 
     const taskData = {
       title: title.trim(),
-      dueDate: isLoop ? null : dueDate,
+      dueDate: isLoop ? null : (dueDate || null),
       courseId: courseId || null,
       courseLabel,
       type,
@@ -88,7 +122,23 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
       } : null,
     };
 
-    await createTask(taskData);
+    if (isEditing) {
+      await onSave(taskToEdit, taskData);
+    } else {
+      await createTask(taskData);
+    }
+    reset();
+    onCreated();
+    onClose();
+  }
+
+  async function handleDeleteClick() {
+    if (!isEditing || !taskToEdit) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    await onDelete(taskToEdit);
     reset();
     onCreated();
     onClose();
@@ -100,7 +150,7 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
-          <h2 className="modal__title">New task</h2>
+          <h2 className="modal__title">{isEditing ? "Edit task" : "New task"}</h2>
           <button className="modal__close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
@@ -198,11 +248,20 @@ function TaskModal({ open, onClose, onCreated, courses, semester }) {
           </label>
         </div>
 
-        <div className="modal__footer">
-          <button className="btn-ghost" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" type="button" onClick={handleSubmit} disabled={!title.trim()}>
-            {isLoop ? "Create recurring task" : "Add task"}
-          </button>
+        <div className="modal__footer modal__footer--split">
+          <div className="modal__footer-left">
+            {isEditing && (
+              <button className={`modal-delete${deleteArmed ? " modal-delete--armed" : ""}`} type="button" onClick={handleDeleteClick}>
+                <IconTrash /> {deleteArmed ? "Confirm delete" : "Delete"}
+              </button>
+            )}
+          </div>
+          <div className="modal__footer-right">
+            <button className="btn-ghost" type="button" onClick={onClose}>Cancel</button>
+            <button className="btn-primary" type="button" onClick={handleSubmit} disabled={!title.trim()}>
+              {isEditing ? "Save changes" : (isLoop ? "Create recurring task" : "Add task")}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -229,6 +288,8 @@ export default function TaskLedgerPage() {
   const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState(null);
+  const [filter, setFilter] = useState("all"); // 'all' | 'syllabus' | 'personal'
 
   const { courses, semester } = useMemo(() => readSetup(), []);
 
@@ -260,6 +321,72 @@ export default function TaskLedgerPage() {
     loadTasks();
   }
 
+  async function handleSaveTask(task, taskData) {
+    if (task.source === "syllabus" && task.recordId && task.taskId) {
+      const { milestones, startByDate } = generateMilestones({
+        type: taskData.type,
+        dueDate: taskData.dueDate,
+        difficulty: taskData.difficulty ?? null,
+      }, semester?.startDate);
+
+      await patchSyllabusRecord(task.recordId, (record) => ({
+        ...record,
+        reviewItems: (record.reviewItems || []).map((item) =>
+          item.id === task.taskId
+            ? {
+                ...item,
+                title: taskData.title,
+                type: taskData.type || "other",
+                dueDateRaw: taskData.dueDate,
+                difficulty: taskData.difficulty ?? null,
+                notes: taskData.notes || item.notes || "",
+                milestones: milestones.length > 0 ? milestones : null,
+                startByDate,
+              }
+            : item
+        ),
+      }));
+      return;
+    }
+
+    await updateTask(task.id, taskData);
+  }
+
+  async function handleDeleteTask(task) {
+    if (task.source === "syllabus" && task.recordId && task.taskId) {
+      await patchSyllabusRecord(task.recordId, (record) => ({
+        ...record,
+        reviewItems: (record.reviewItems || []).map((item) =>
+          item.id === task.taskId ? { ...item, status: "rejected" } : item
+        ),
+      }));
+      return;
+    }
+
+    await removeTask(task.id);
+  }
+
+  function resolveEditableTask(task) {
+    if (task.isMilestone && task.parentTaskId) {
+      return parentTasks.find((parent) => parent.id === task.parentTaskId) || task;
+    }
+    if (task.isOccurrence && task.parentId) {
+      return parentTasks.find((parent) => parent.id === task.parentId) || task;
+    }
+    return task;
+  }
+
+  function handleOpenTask(task) {
+    const editableTask = resolveEditableTask(task);
+    setTaskToEdit(editableTask);
+    setModalOpen(true);
+  }
+
+  function handleCloseModal() {
+    setModalOpen(false);
+    setTaskToEdit(null);
+  }
+
   // Derive summary data
   const summary = useMemo(() => {
     const active = tasks.filter((t) => t.status !== "done" && !t.isMilestone);
@@ -287,6 +414,23 @@ export default function TaskLedgerPage() {
     return { today, thisWeek, upcomingExam, startNow, heavy };
   }, [tasks, parentTasks]);
 
+  const filteredTasks = useMemo(() => {
+    if (filter === "syllabus") {
+      return tasks.filter((t) => 
+        t.source === "syllabus" || 
+        (t.isMilestone && t.parentTaskId?.startsWith("syl::"))
+      );
+    }
+    if (filter === "personal") {
+      return tasks.filter((t) => 
+        t.source === "manual" || 
+        t.source === "recurring-instance" ||
+        (t.isMilestone && !t.parentTaskId?.startsWith("syl::"))
+      );
+    }
+    return tasks;
+  }, [tasks, filter]);
+
   const activeCount = tasks.filter((t) => t.status !== "done").length;
 
   if (loading) {
@@ -306,7 +450,14 @@ export default function TaskLedgerPage() {
     <>
       <header className="page-header">
         <h1 className="page-title">Task Ledger</h1>
-        <button className="btn-primary" type="button" onClick={() => setModalOpen(true)}>
+        <button
+          className="btn-primary"
+          type="button"
+          onClick={() => {
+            setTaskToEdit(null);
+            setModalOpen(true);
+          }}
+        >
           + New task
         </button>
       </header>
@@ -352,8 +503,27 @@ export default function TaskLedgerPage() {
       <div className="database-view">
         <div className="database-toolbar">
           <div className="database-toolbar__left">
-            <span className="database-toolbar__title">All tasks</span>
-            <span className="database-toolbar__count">· {activeCount} active, {tasks.length} total</span>
+            <div className="filter-tabs">
+              <button 
+                className={`filter-tab${filter === "all" ? " filter-tab--active" : ""}`}
+                onClick={() => setFilter("all")}
+              >
+                All
+              </button>
+              <button 
+                className={`filter-tab${filter === "syllabus" ? " filter-tab--active" : ""}`}
+                onClick={() => setFilter("syllabus")}
+              >
+                Syllabus
+              </button>
+              <button 
+                className={`filter-tab${filter === "personal" ? " filter-tab--active" : ""}`}
+                onClick={() => setFilter("personal")}
+              >
+                Personal
+              </button>
+            </div>
+            <span className="database-toolbar__count">· {filteredTasks.filter(t => t.status !== 'done').length} active</span>
           </div>
         </div>
 
@@ -368,46 +538,68 @@ export default function TaskLedgerPage() {
             <table className="db-table">
               <thead>
                 <tr>
-                  <th style={{ width: 36 }}></th>
+                  <th style={{ width: 40 }}></th>
                   <th>Task</th>
-                  <th>Due</th>
-                  <th>Start by</th>
-                  <th>Type</th>
-                  <th>Difficulty</th>
-                  <th>Urgency</th>
+                  <th style={{ width: 90 }}>Due</th>
+                  <th style={{ width: 90 }}>Start by</th>
+                  <th style={{ width: 100 }}>Type</th>
+                  <th style={{ width: 110 }}>Difficulty</th>
+                  <th style={{ width: 120 }}>Urgency</th>
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((task) => {
+                {filteredTasks.map((task) => {
                   const isDone = task.status === "done";
                   const urgency = getTaskUrgency(task.dueDate, task.status);
                   const isMilestone = task.isMilestone;
 
                   return (
-                    <tr key={task.id} className={`${isDone ? "db-table-row--done" : ""}${isMilestone ? " db-table-row--milestone" : ""}`}>
-                      <td>
+                    <tr
+                      key={task.id}
+                      className={`db-table-row--clickable${isDone ? " db-table-row--done" : ""}${isMilestone ? " db-table-row--milestone" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleOpenTask(task)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleOpenTask(task);
+                        }
+                      }}
+                    >
+                      <td
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           className="horizon-card__checkbox"
                           checked={isDone}
-                          onChange={() => handleToggle(task)}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            handleToggle(task);
+                          }}
                           style={{ margin: 0 }}
                         />
                       </td>
                       <td>
-                        <span className={`cell-task${isMilestone ? " cell-task--milestone" : ""}`}>{task.title}</span>
-                        {task.isOccurrence && <span className="tag tag--gray" style={{ marginLeft: 6, fontSize: 10 }}>recurring</span>}
-                        {task.course && task.course !== "—" && !isMilestone && (
-                          <span className="cell-course-badge">{task.course}</span>
-                        )}
-                        {isMilestone && task.milestoneWhy && (
-                          <span className="cell-why-hint">{task.milestoneWhy}</span>
-                        )}
+                        <div className="cell-task-wrapper">
+                          <span className={`cell-task${isMilestone ? " cell-task--milestone" : ""}`} title={task.title}>
+                            {task.title}
+                          </span>
+                          {task.isOccurrence && <span className="tag tag--gray" style={{ fontSize: 10 }}>recurring</span>}
+                          {task.course && task.course !== "—" && !isMilestone && (
+                            <span className="cell-course-badge">{task.course}</span>
+                          )}
+                          {isMilestone && task.milestoneWhy && (
+                            <span className="cell-why-hint">{task.milestoneWhy}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="cell-date">{formatDate(task.dueDate)}</td>
                       <td className="cell-date cell-date--start">{!isMilestone && task.startByDate ? formatDate(task.startByDate) : ""}</td>
                       <td>{!isMilestone && <TypeTag type={task.type} />}</td>
-                      <td>{!isMilestone && <DifficultyDots value={task.difficulty} />}</td>
+                      <td><DifficultyDots value={task.difficulty} /></td>
                       <td><UrgencyTag urgency={urgency} /></td>
                     </tr>
                   );
@@ -420,10 +612,13 @@ export default function TaskLedgerPage() {
 
       <TaskModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={handleCloseModal}
         onCreated={loadTasks}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
         courses={courses}
         semester={semester}
+        taskToEdit={taskToEdit}
       />
     </>
   );

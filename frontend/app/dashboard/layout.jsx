@@ -15,6 +15,15 @@ function IconLedger() {
   );
 }
 
+function IconChart() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3v18h18" />
+      <path d="M18 9l-5 5-4-4-5 5" />
+    </svg>
+  );
+}
+
 function IconUpload() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -106,19 +115,23 @@ function IconMoon() {
 
 const navSections = [
   {
-    label: "Semester",
+    label: "Execution",
     items: [
-      { label: "Task Ledger", href: "/dashboard", icon: IconLedger },
       { label: "What Matters", href: "/dashboard/thisweek", icon: IconFocus },
-      { label: "Calendar", href: "/dashboard/calendar", icon: IconCalendar },
     ],
   },
   {
-    label: "Syllabi",
+    label: "Planning",
     items: [
-      { label: "Upload", href: "/dashboard/upload", icon: IconUpload },
-      { label: "Review", href: "/dashboard/review", icon: IconReview },
-      { label: "Course Tasks", href: "/dashboard/coursetasks", icon: IconCourseTasks },
+      { label: "Task Ledger", href: "/dashboard", icon: IconLedger },
+      { label: "Calendar", href: "/dashboard/calendar", icon: IconCalendar },
+      { label: "Forecast", href: "/dashboard/forecast", icon: IconChart },
+    ],
+  },
+  {
+    label: "Setup",
+    items: [
+      { label: "Syllabus Lab", href: "/dashboard/sources", icon: IconUpload },
     ],
   },
 ];
@@ -126,11 +139,20 @@ const navSections = [
 const pageNames = {
   "/dashboard": "Task Ledger",
   "/dashboard/thisweek": "What Matters",
+  "/dashboard/forecast": "Workload Forecast",
   "/dashboard/calendar": "Calendar",
-  "/dashboard/upload": "Upload",
-  "/dashboard/review": "Review",
-  "/dashboard/coursetasks": "Course Tasks",
+  "/dashboard/sources": "Syllabus Lab",
+  "/dashboard/review": "Verification Queue",
 };
+
+function IconSidebar() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+    </svg>
+  );
+}
 
 function useTheme() {
   const [theme, setTheme] = useState("dark");
@@ -160,9 +182,16 @@ export default function DashboardLayout({ children }) {
   const router = useRouter();
   const [setupValid, setSetupValid] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
 
   useEffect(() => {
+    // Check local storage for collapsed state
+    try {
+      const saved = localStorage.getItem("sys-sidebar-collapsed");
+      if (saved === "true") setIsSidebarCollapsed(true);
+    } catch {}
+
     try {
       const raw = localStorage.getItem("sys-semester-setup");
       if (!raw) { setSetupValid(false); return; }
@@ -218,6 +247,12 @@ export default function DashboardLayout({ children }) {
     }
   }
 
+  function toggleSidebar() {
+    const next = !isSidebarCollapsed;
+    setIsSidebarCollapsed(next);
+    try { localStorage.setItem("sys-sidebar-collapsed", String(next)); } catch {}
+  }
+
   if (setupValid === null) return null;
   if (setupValid === false) return null;
 
@@ -230,12 +265,22 @@ export default function DashboardLayout({ children }) {
   const currentPageName = pageNames[pathname] || "Dashboard";
 
   return (
-    <div className="dashboard">
-      <aside className="sidebar">
-        <Link href="/dashboard" className="sidebar-brand">
-          <span className="sidebar-brand__icon"><BrandIcon /></span>
-          <span className="sidebar-brand__text">Sync Your Semester</span>
-        </Link>
+    <div className={`dashboard${isSidebarCollapsed ? " dashboard--collapsed" : ""}`}>
+      <aside className={`sidebar${isSidebarCollapsed ? " sidebar--collapsed" : ""}`}>
+        <div className="sidebar-header">
+          <Link href="/dashboard" className="sidebar-brand">
+            <span className="sidebar-brand__icon"><BrandIcon /></span>
+            <span className="sidebar-brand__text">Sync Your Semester</span>
+          </Link>
+          <button 
+            className="sidebar-toggle-btn" 
+            onClick={toggleSidebar} 
+            title="Collapse Sidebar"
+            aria-label="Collapse Sidebar"
+          >
+            <IconSidebar />
+          </button>
+        </div>
 
         {navSections.map((section) => (
           <div className="sidebar-section" key={section.label}>
@@ -272,12 +317,33 @@ export default function DashboardLayout({ children }) {
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
         {/* Top bar */}
         <div className="topbar">
-          <div className="topbar__breadcrumb">
-            <span>Sync Your Semester</span>
-            <span className="topbar__breadcrumb-sep">/</span>
-            <span className="topbar__breadcrumb-current">{currentPageName}</span>
+          <div className="topbar__left">
+            {isSidebarCollapsed && (
+              <button 
+                className="topbar__restore-btn" 
+                onClick={toggleSidebar}
+                title="Restore Sidebar"
+                aria-label="Restore Sidebar"
+              >
+                <IconSidebar />
+              </button>
+            )}
+            <div className="topbar__breadcrumb">
+              <span>Sync Your Semester</span>
+              <span className="topbar__breadcrumb-sep">/</span>
+              <span className="topbar__breadcrumb-current">{currentPageName}</span>
+            </div>
           </div>
           <div className="topbar__actions">
+            <Link
+              href="/focus"
+              className="topbar__calm-link"
+              aria-label="Enter Calm Mode"
+              title="Focus on one thing"
+            >
+              <IconFocus />
+              <span>Calm Mode</span>
+            </Link>
             <button
               className="theme-toggle"
               onClick={toggleTheme}

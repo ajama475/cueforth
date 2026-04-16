@@ -2,6 +2,7 @@ import { listSyllabusRecords, patchSyllabusRecord } from "../storage/syllabusSto
 import { listTasks, putTask, patchTask, deleteTask } from "../storage/taskStore";
 
 const SETUP_STORAGE_KEY = "sys-semester-setup";
+const MAX_RECURRING_OCCURRENCES = 220;
 
 function readSetup() {
   if (typeof window === "undefined") return { courses: [], semester: {} };
@@ -18,18 +19,32 @@ function readSetup() {
   }
 }
 
-function stripExtension(filename) {
+export function stripExtension(filename) {
+  if (!filename) return "";
   return filename.replace(/\.[^/.]+$/, "");
 }
 
-function courseLabel(courseId, courses, fallback) {
+export function extractCourseCode(text) {
+  if (!text) return "";
+  const match = text.match(/([A-Z]{2,5})\s*(\d{2,5})/i);
+  if (match) {
+    return `${match[1].toUpperCase()} ${match[2]}`;
+  }
+  return text;
+}
+
+export function courseLabel(courseId, courses, fallback) {
   const course = courses.find((c) => c.id === courseId);
-  if (!course) return fallback || "—";
-  return course.code || course.name || fallback || "—";
+  if (!course) return extractCourseCode(fallback) || "—";
+  return course.code || course.name || extractCourseCode(fallback) || "—";
 }
 
 function toLocalMidnight(isoDate) {
   return new Date(`${isoDate}T00:00:00`);
+}
+
+function isValidDate(dateObj) {
+  return dateObj instanceof Date && !Number.isNaN(dateObj.getTime());
 }
 
 export function formatISO(dateObj) {
@@ -78,12 +93,20 @@ function materializeRecurring(task, semesterEnd) {
 
   const start = toLocalMidnight(task.recurrence.startDate || task.dueDate || new Date().toISOString().slice(0, 10));
   const end = toLocalMidnight(endStr);
-  const daySet = new Set(task.recurrence.days);
+  if (!isValidDate(start) || !isValidDate(end) || start > end) return [task];
+
+  const daySet = new Set(
+    task.recurrence.days
+      .map((day) => Number(day))
+      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+  );
+  if (daySet.size === 0) return [task];
+
   const completedDates = new Set(task.completedDates || []);
   const occurrences = [];
 
   const cursor = new Date(start);
-  while (cursor <= end) {
+  while (cursor <= end && occurrences.length < MAX_RECURRING_OCCURRENCES) {
     if (daySet.has(cursor.getDay())) {
       const isoDate = formatISO(cursor);
       occurrences.push({
@@ -91,18 +114,18 @@ function materializeRecurring(task, semesterEnd) {
         id: `${task.id}::${isoDate}`,
         parentId: task.id,
         dueDate: isoDate,
-        status: completedDates.has(isoDate) ? "done" : "active",
+        status: task.status === "done" || completedDates.has(isoDate) ? "done" : "active",
         isOccurrence: true,
       });
     }
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  return occurrences;
+  return occurrences.length > 0 ? occurrences : [task];
 }
 
 function sortTasks(tasks) {
-  return tasks.sort((a, b) => {
+  return [...tasks].sort((a, b) => {
     if (a.status === "done" && b.status !== "done") return 1;
     if (b.status === "done" && a.status !== "done") return -1;
     const dateA = a.dueDate || "";
@@ -445,6 +468,39 @@ export async function createTask(taskData) {
   };
   await putTask(task);
   return task;
+}
+
+export async function updateTask(taskId, taskData) {
+  const { semester } = readSetup();
+  
+  await patchTask(taskId, (existing) => {
+    // Re-run milestone generation if sensitive fields changed
+    const needsMilestoneRegen = 
+      taskData.type !== existing.type || 
+      taskData.dueDate !== existing.dueDate ||
+      taskData.difficulty !== existing.difficulty;
+
+    let milestones = existing.milestones;
+    let startByDate = existing.startByDate;
+
+    if (needsMilestoneRegen) {
+      const regen = generateMilestones({
+        type: taskData.type ?? existing.type,
+        dueDate: taskData.dueDate ?? existing.dueDate,
+        difficulty: taskData.difficulty ?? existing.difficulty,
+      }, semester?.startDate);
+      milestones = regen.milestones.length > 0 ? regen.milestones : null;
+      startByDate = regen.startByDate;
+    }
+
+    return {
+      ...existing,
+      ...taskData,
+      milestones,
+      startByDate,
+      updatedAt: Date.now(),
+    };
+  });
 }
 
 export async function removeTask(taskId) {
