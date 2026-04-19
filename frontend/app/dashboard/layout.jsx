@@ -303,10 +303,9 @@ export default function DashboardLayout({ children }) {
           </div>
         ))}
 
-        <div style={{ marginTop: "auto", padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
+        <div className="sidebar-footer">
           <button
-            className="sidebar-nav__item"
-            style={{ color: "var(--text-tertiary)", fontSize: 12 }}
+            className="sidebar-nav__item sidebar-reset-button"
             onClick={() => setShowResetConfirm(true)}
           >
             Reset semester

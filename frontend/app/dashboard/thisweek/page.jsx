@@ -166,6 +166,42 @@ function StartNowCard({ task, nextAction, onSaveCommitment }) {
   );
 }
 
+function PlanningBrief({ startNowItems, heavyWeek, buckets }) {
+  const leadItem = startNowItems[0];
+  const dueSoonCount = buckets.Today.length + buckets["This Week"].length;
+  const nextMove = leadItem
+    ? `${leadItem.task.title}: ${leadItem.nextAction.label}`
+    : dueSoonCount > 0
+      ? `${dueSoonCount} item${dueSoonCount !== 1 ? "s" : ""} due this week`
+      : "No urgent academic work today";
+
+  return (
+    <section className="planning-brief" aria-label="Today planning brief">
+      <div className="planning-brief__main">
+        <span className="planning-brief__eyebrow">Today&apos;s plan</span>
+        <h2 className="planning-brief__title">{nextMove}</h2>
+        <p className="planning-brief__copy">
+          Commit to one start session before reacting to the rest of the list.
+        </p>
+      </div>
+      <div className="planning-brief__stats" aria-label="Planning totals">
+        <div>
+          <strong>{startNowItems.length}</strong>
+          <span>Start now</span>
+        </div>
+        <div>
+          <strong>{dueSoonCount}</strong>
+          <span>Due soon</span>
+        </div>
+        <div>
+          <strong>{heavyWeek?.count || 0}</strong>
+          <span>Heavy items</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HeavyWeekCard({ signal }) {
   if (!signal) return null;
 
@@ -289,33 +325,55 @@ export default function WhatMattersPage() {
 
   return (
     <>
-      <header className="page-header">
-        <h1 className="page-title">What Matters</h1>
+      <header className="page-header page-header--planning">
+        <div>
+          <h1 className="page-title">What Matters</h1>
+          <p className="page-subtitle">A focused planning surface for deadlines, start windows, and the next real move.</p>
+        </div>
       </header>
 
-      {startNowItems.length > 0 && (
-        <div className="start-now-section">
-          <div className="start-now-section__header">
-            <h2 className="start-now-section__title">Start now</h2>
-            <span className="start-now-section__subtitle">Major tasks with open preparation windows</span>
-          </div>
-          <div className="start-now-section__grid">
-            {startNowItems.map(({ task, nextAction }) => (
-              <StartNowCard key={task.id} task={task} nextAction={nextAction} onSaveCommitment={handleSaveCommitment} />
-            ))}
-          </div>
+      <div className="what-matters-page">
+        <PlanningBrief startNowItems={startNowItems} heavyWeek={heavyWeek} buckets={buckets} />
+
+        <div className="what-matters-top-grid">
+          {startNowItems.length > 0 ? (
+            <section className="start-now-section">
+              <div className="start-now-section__header">
+                <h2 className="start-now-section__title">Start now</h2>
+                <span className="start-now-section__subtitle">Major tasks with open preparation windows</span>
+              </div>
+              <div className="start-now-section__grid">
+                {startNowItems.map(({ task, nextAction }) => (
+                  <StartNowCard key={task.id} task={task} nextAction={nextAction} onSaveCommitment={handleSaveCommitment} />
+                ))}
+              </div>
+            </section>
+          ) : (
+            <section className="start-now-section start-now-section--empty">
+              <div className="start-now-section__header">
+                <h2 className="start-now-section__title">Start now</h2>
+              </div>
+              <p className="start-now-section__empty">No major prep windows are open right now.</p>
+            </section>
+          )}
+
+          <HeavyWeekCard signal={heavyWeek} />
         </div>
-      )}
 
-      <HeavyWeekCard signal={heavyWeek} />
-
-      <div className="horizon-board">
-        {buckets.Overdue.length > 0 && (
-          <BucketColumn title="Overdue" tasks={buckets.Overdue} onToggle={handleToggle} />
-        )}
-        <BucketColumn title="Today" tasks={buckets.Today} onToggle={handleToggle} />
-        <BucketColumn title="This Week" tasks={buckets["This Week"]} onToggle={handleToggle} />
-        <BucketColumn title="Next Week" tasks={buckets["Next Week"]} onToggle={handleToggle} />
+        <section className="due-soon-section">
+          <div className="due-soon-section__header">
+            <h2 className="start-now-section__title">Due soon</h2>
+            <span className="start-now-section__subtitle">Sorted by effort-aware urgency</span>
+          </div>
+          <div className="horizon-board">
+            {buckets.Overdue.length > 0 && (
+              <BucketColumn title="Overdue" tasks={buckets.Overdue} onToggle={handleToggle} />
+            )}
+            <BucketColumn title="Today" tasks={buckets.Today} onToggle={handleToggle} />
+            <BucketColumn title="This Week" tasks={buckets["This Week"]} onToggle={handleToggle} />
+            <BucketColumn title="Next Week" tasks={buckets["Next Week"]} onToggle={handleToggle} />
+          </div>
+        </section>
       </div>
     </>
   );
