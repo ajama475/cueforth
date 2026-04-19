@@ -8,9 +8,7 @@ import {
   listSyllabusRecords,
   patchSyllabusRecord,
 } from "../../../lib/storage/syllabusStore";
-import { generateMilestones, readSetup, courseLabel, extractCourseCode } from "../../../lib/tasks/taskHelpers";
-
-const SETUP_STORAGE_KEY = "sys-semester-setup";
+import { generateMilestones, readSetup, courseLabel, extractCourseCode, stripExtension } from "../../../lib/tasks/taskHelpers";
 
 /* ---- Icons ---- */
 
@@ -145,19 +143,7 @@ function formatDueDate(dateString) {
   }).format(new Date(`${dateString}T00:00:00`));
 }
 
-function stripExtension(filename) {
-  return filename.replace(/\.[^/.]+$/, "");
-}
-function readSetupCourses() {
-  try {
-    const raw = localStorage.getItem(SETUP_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.courses) ? parsed.courses : [];
-  } catch {
-    return [];
-  }
-}
+
 
 function itemStatusText(status) {
   if (status === "approved") return "Approved";
@@ -782,7 +768,7 @@ function ReviewPageContent() {
   useEffect(() => {
     let isMounted = true;
 
-    setCourses(readSetupCourses());
+    setCourses(readSetup().courses || []);
 
     listSyllabusRecords()
       .then((nextRecords) => {
