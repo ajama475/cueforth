@@ -575,7 +575,7 @@ export default function TaskLedgerPage() {
           className="btn-primary"
           type="button"
           onClick={() => {
-            setSelectedTask(null);
+            setTaskToEdit(null);
             setModalOpen(true);
           }}
         >
@@ -666,7 +666,7 @@ export default function TaskLedgerPage() {
         onDelete={handleDeleteTask}
         courses={courses}
         semester={semester}
-        taskToEdit={selectedTask}
+        taskToEdit={taskToEdit}
       />
     </>
   );
