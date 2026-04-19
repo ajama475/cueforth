@@ -46,19 +46,36 @@ function formatDateShort(isoDate) {
   }).format(new Date(`${isoDate}T00:00:00`));
 }
 
+function formatSessionTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getCommitmentDate(commitment) {
+  const scheduledAt = commitment?.scheduledAt;
+  if (typeof scheduledAt !== "string" || scheduledAt.length < 10) return null;
+  return scheduledAt.slice(0, 10);
+}
+
 function sameMonth(isoDate, year, month) {
   const date = new Date(`${isoDate}T00:00:00`);
   return date.getFullYear() === year && date.getMonth() === month;
 }
 
 function itemPriority(item) {
-  if (!item._isMilestone && !item._isStartBy) return 0;
-  if (item._isStartBy) return 1;
-  return 2;
+  if (!item._isMilestone && !item._isStartBy && !item._isCommitment) return 0;
+  if (item._isCommitment) return 1;
+  if (item._isStartBy) return 2;
+  return 3;
 }
 
 /* Calendar event cell item */
-function CalendarEvent({ task, isMilestone, onClick, isStartBy }) {
+function CalendarEvent({ task, isMilestone, onClick, isStartBy, isCommitment }) {
   const isDone = task.status === "done";
   const urgency = getTaskUrgency(task.dueDate, task.status);
 
@@ -68,13 +85,14 @@ function CalendarEvent({ task, isMilestone, onClick, isStartBy }) {
     isDone ? "calendar-event--done" : "",
     isMilestone ? "calendar-event--milestone" : "",
     isStartBy ? "calendar-event--start-by" : "",
+    isCommitment ? "calendar-event--commitment" : "",
   ].filter(Boolean).join(" ");
 
   return (
     <button
       type="button"
       className={classes}
-      title={`${isMilestone ? "[Prep] " : isStartBy ? "[Start by] " : ""}${task.title}`}
+      title={`${isMilestone ? "[Prep] " : isStartBy ? "[Start by] " : isCommitment ? "[Start session] " : ""}${task.title}`}
       onClick={(event) => {
         event.stopPropagation();
         onClick(task);
@@ -82,7 +100,8 @@ function CalendarEvent({ task, isMilestone, onClick, isStartBy }) {
     >
       {isStartBy && <span className="calendar-event__start-icon">▸</span>}
       {isMilestone && <span className="calendar-event__ms-icon">↳</span>}
-      <span className="calendar-event__label">{isMilestone ? task._msLabel : task.title}</span>
+      {isCommitment && <span className="calendar-event__start-icon">•</span>}
+      <span className="calendar-event__label">{isMilestone ? task._msLabel : isCommitment ? `Start: ${task.title}` : task.title}</span>
     </button>
   );
 }
@@ -119,6 +138,8 @@ function DayPanel({ dateIso, items, onClose, onToggle }) {
                     <span className="calendar-panel__ms-badge">Prep</span>
                   ) : item._isStartBy ? (
                     <span className="calendar-panel__start-badge">Start by</span>
+                  ) : item._isCommitment ? (
+                    <span className="calendar-panel__session-badge">Start session</span>
                   ) : (
                     <span className={`tag tag--${urgency.color}`}>{urgency.label}</span>
                   )}
@@ -128,7 +149,7 @@ function DayPanel({ dateIso, items, onClose, onToggle }) {
                 </div>
 
                 <h4 className="calendar-panel__item-title">
-                  {item._isMilestone ? `↳ ${item._msLabel}` : item.title}
+                  {item._isMilestone ? `↳ ${item._msLabel}` : item._isCommitment ? `Start: ${item.title}` : item.title}
                 </h4>
 
                 {item._isMilestone && item._msParentTitle && (
@@ -150,7 +171,17 @@ function DayPanel({ dateIso, items, onClose, onToggle }) {
                   </p>
                 )}
 
-                {!item._isMilestone && !isDone && (
+                {item._isCommitment && (
+                  <div className="calendar-panel__session">
+                    {item._commitment?.scheduledAt && (
+                      <span>{formatSessionTime(item._commitment.scheduledAt)}</span>
+                    )}
+                    {item._commitment?.place && <span>{item._commitment.place}</span>}
+                    {item._commitment?.firstStep && <span>{item._commitment.firstStep}</span>}
+                  </div>
+                )}
+
+                {!item._isMilestone && !item._isStartBy && !item._isCommitment && !isDone && (
                   <button
                     className="calendar-panel__action"
                     onClick={() => onToggle(item)}
@@ -213,6 +244,7 @@ export default function CalendarPage() {
   // 1. Real tasks on their due date (primary)
   // 2. Milestone items on their dates (prep)
   // 3. Start-by markers on startByDate
+  // 4. Planned start sessions from What Matters commitments
   const dateMap = useMemo(() => {
     const map = {};
     function add(dateStr, item) {
@@ -224,7 +256,7 @@ export default function CalendarPage() {
     for (const task of tasks) {
       // Real due date entry
       if (task.dueDate) {
-        add(task.dueDate, { ...task, _key: task.id, _isMilestone: false, _isStartBy: false });
+        add(task.dueDate, { ...task, _key: task.id, _isMilestone: false, _isStartBy: false, _isCommitment: false });
       }
 
       // Milestones
@@ -236,6 +268,7 @@ export default function CalendarPage() {
             _key: `${task.id}::${ms.id}`,
             _isMilestone: true,
             _isStartBy: false,
+            _isCommitment: false,
             _msLabel: ms.label,
             _msParentTitle: task.title,
             _msId: ms.id,
@@ -252,8 +285,21 @@ export default function CalendarPage() {
             _key: `${task.id}::start-by`,
             _isMilestone: false,
             _isStartBy: true,
+            _isCommitment: false,
           });
         }
+      }
+
+      const commitmentDate = getCommitmentDate(task.startCommitment);
+      if (commitmentDate && task.status !== "done") {
+        add(commitmentDate, {
+          ...task,
+          _key: `${task.id}::start-session`,
+          _isMilestone: false,
+          _isStartBy: false,
+          _isCommitment: true,
+          _commitment: task.startCommitment,
+        });
       }
     }
 
@@ -289,8 +335,9 @@ export default function CalendarPage() {
     .sort((a, b) => a._dateIso.localeCompare(b._dateIso) || itemPriority(a) - itemPriority(b))
     .slice(0, 5);
 
-  const monthDeadlineCount = monthItems.filter((item) => !item._isMilestone && !item._isStartBy).length;
-  const monthPrepCount = monthItems.length - monthDeadlineCount;
+  const monthDeadlineCount = monthItems.filter((item) => !item._isMilestone && !item._isStartBy && !item._isCommitment).length;
+  const monthSessionCount = monthItems.filter((item) => item._isCommitment).length;
+  const monthPrepCount = monthItems.length - monthDeadlineCount - monthSessionCount;
 
   return (
     <>
@@ -303,7 +350,7 @@ export default function CalendarPage() {
           <div className="calendar-header">
             <div>
               <h2 className="calendar-title">{monthName} {viewYear}</h2>
-              <p className="calendar-subtitle">{monthDeadlineCount} deadlines · {monthPrepCount} prep markers</p>
+              <p className="calendar-subtitle">{monthDeadlineCount} deadlines · {monthSessionCount} start sessions · {monthPrepCount} prep markers</p>
             </div>
             <div className="calendar-nav">
               <button className="btn-ghost" onClick={goToday}>Today</button>
@@ -326,9 +373,9 @@ export default function CalendarPage() {
                     onClick={() => selectDate(item._dateIso)}
                   >
                     <span className="calendar-agenda__date">{formatDateShort(item._dateIso)}</span>
-                    <span className="calendar-agenda__title">{item._isMilestone ? item._msLabel : item.title}</span>
-                    <span className={`calendar-agenda__kind${item._isMilestone ? " calendar-agenda__kind--prep" : item._isStartBy ? " calendar-agenda__kind--start" : ""}`}>
-                      {item._isMilestone ? "Prep" : item._isStartBy ? "Start" : "Due"}
+                    <span className="calendar-agenda__title">{item._isMilestone ? item._msLabel : item._isCommitment ? `Start: ${item.title}` : item.title}</span>
+                    <span className={`calendar-agenda__kind${item._isMilestone ? " calendar-agenda__kind--prep" : item._isStartBy ? " calendar-agenda__kind--start" : item._isCommitment ? " calendar-agenda__kind--session" : ""}`}>
+                      {item._isMilestone ? "Prep" : item._isStartBy ? "Start" : item._isCommitment ? "Session" : "Due"}
                     </span>
                   </button>
                 ))
@@ -351,7 +398,8 @@ export default function CalendarPage() {
               const dayItems = dateMap[iso] || [];
 
               // Count by category for visual density
-              const deadlines = dayItems.filter((it) => !it._isMilestone && !it._isStartBy);
+              const deadlines = dayItems.filter((it) => !it._isMilestone && !it._isStartBy && !it._isCommitment);
+              const sessions = dayItems.filter((it) => it._isCommitment);
               const milestones = dayItems.filter((it) => it._isMilestone);
               const startBys = dayItems.filter((it) => it._isStartBy);
               const sortedItems = [...dayItems].sort((a, b) => itemPriority(a) - itemPriority(b));
@@ -377,19 +425,23 @@ export default function CalendarPage() {
                   {dayItems.length > 0 && (
                     <div className="calendar-cell__density" aria-hidden="true">
                       {deadlines.length > 0 && <span className="calendar-cell__density-deadline" style={{ flex: deadlines.length }} />}
+                      {sessions.length > 0 && <span className="calendar-cell__density-session" style={{ flex: sessions.length }} />}
                       {startBys.length > 0 && <span className="calendar-cell__density-start" style={{ flex: startBys.length }} />}
                       {milestones.length > 0 && <span className="calendar-cell__density-prep" style={{ flex: milestones.length }} />}
                     </div>
                   )}
                   <div className="calendar-cell__events">
                     {deadlines.slice(0, 2).map((item) => (
-                      <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={false} onClick={() => setSelectedDate(iso)} />
+                      <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={false} isCommitment={false} onClick={() => setSelectedDate(iso)} />
+                    ))}
+                    {sessions.slice(0, 1).map((item) => (
+                      <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={false} isCommitment={true} onClick={() => setSelectedDate(iso)} />
                     ))}
                     {startBys.slice(0, 1).map((item) => (
-                      <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={true} onClick={() => setSelectedDate(iso)} />
+                      <CalendarEvent key={item._key} task={item} isMilestone={false} isStartBy={true} isCommitment={false} onClick={() => setSelectedDate(iso)} />
                     ))}
                     {milestones.slice(0, 1).map((item) => (
-                      <CalendarEvent key={item._key} task={item} isMilestone={true} isStartBy={false} onClick={() => setSelectedDate(iso)} />
+                      <CalendarEvent key={item._key} task={item} isMilestone={true} isStartBy={false} isCommitment={false} onClick={() => setSelectedDate(iso)} />
                     ))}
                     {sortedItems.length > 4 && (
                       <div className="calendar-cell__more">+{sortedItems.length - 4} more</div>
@@ -402,6 +454,7 @@ export default function CalendarPage() {
 
           <div className="calendar-legend">
             <span className="calendar-legend__item"><span className="calendar-legend__swatch calendar-legend__swatch--deadline" /> Deadline</span>
+            <span className="calendar-legend__item"><span className="calendar-legend__swatch calendar-legend__swatch--session" /> Start session</span>
             <span className="calendar-legend__item"><span className="calendar-legend__swatch calendar-legend__swatch--prep" /> Prep step</span>
             <span className="calendar-legend__item"><span className="calendar-legend__swatch calendar-legend__swatch--start" /> Start by</span>
           </div>

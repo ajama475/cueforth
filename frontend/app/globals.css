@@ -3409,6 +3409,10 @@ a {
   color: var(--tag-green-text);
 }
 
+.calendar-agenda__kind--session {
+  color: var(--tag-blue-text);
+}
+
 .calendar-agenda__empty {
   color: var(--text-tertiary);
   font-size: 12px;
@@ -3525,6 +3529,7 @@ a {
 }
 
 .calendar-cell__density-deadline,
+.calendar-cell__density-session,
 .calendar-cell__density-start,
 .calendar-cell__density-prep {
   display: block;
@@ -3533,6 +3538,10 @@ a {
 
 .calendar-cell__density-deadline {
   background: var(--tag-orange-text);
+}
+
+.calendar-cell__density-session {
+  background: var(--tag-blue-text);
 }
 
 .calendar-cell__density-start {
@@ -3601,6 +3610,14 @@ a {
   font-weight: 500;
 }
 
+.calendar-event--commitment {
+  border-left-color: var(--tag-blue-text);
+  background: var(--tag-blue-bg);
+  color: var(--tag-blue-text);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .calendar-event__start-icon,
 .calendar-event__ms-icon {
   font-size: 9px;
@@ -3647,6 +3664,11 @@ a {
 .calendar-legend__swatch--start {
   background: var(--tag-green-bg);
   border-left: 2.5px solid var(--tag-green-text);
+}
+
+.calendar-legend__swatch--session {
+  background: var(--tag-blue-bg);
+  border-left: 2.5px solid var(--tag-blue-text);
 }
 
 /* Day detail panel */
@@ -3741,6 +3763,15 @@ a {
   border-radius: var(--radius-sm);
 }
 
+.calendar-panel__session-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tag-blue-text);
+  background: var(--tag-blue-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
 .calendar-panel__next-action {
   font-size: 12px;
   color: var(--accent);
@@ -3759,6 +3790,20 @@ a {
   font-size: 12px;
   color: var(--tag-green-text);
   margin-top: 2px;
+}
+
+.calendar-panel__session {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.calendar-panel__session span:first-child {
+  color: var(--tag-blue-text);
+  font-weight: 650;
 }
 
 .calendar-panel__action {
