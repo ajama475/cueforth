@@ -2,372 +2,353 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  getAllSemesterTasks,
   getParentTasks,
-  getTaskUrgency,
   getTaskBucket,
-  isPrepWindowOpen,
+  getTaskUrgency,
   getNextAction,
-  generateMilestones,
-  getStartByDateFromMilestones,
-  shouldRegenerateStartPlan,
+  isPrepWindowOpen,
+  getEffortPriorityScore,
+  getHeavyWeekSignal,
+  sortByEffortPriority,
+  saveStartCommitment,
   toggleTaskCompletion,
-  createTask,
-  updateTask,
-  updateMilestone,
-  deleteMilestone,
-  removeTask,
+  getAllSemesterTasks,
   readSetup,
+  formatISO,
 } from "../../lib/tasks/taskHelpers";
-import { listSyllabusRecords, patchSyllabusRecord } from "../../lib/storage/syllabusStore";
+
+/* ===========================================
+   SEMESTER CONTEXT
+   Week number + progress through the term
+   =========================================== */
+
+/**
+ * Derives the current week number and total weeks from semester dates.
+ * Week 1 starts on the semester start date regardless of weekday.
+ * Returns null values if semester dates are missing.
+ */
+function getSemesterProgress(semester) {
+  if (!semester?.startDate || !semester?.endDate) return null;
+
+  const start = new Date(`${semester.startDate}T00:00:00`);
+  const end = new Date(`${semester.endDate}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (start >= end) return null;
+
+  const totalMs = end - start;
+  const elapsedMs = today - start;
+  const totalWeeks = Math.ceil(totalMs / (7 * 24 * 60 * 60 * 1000));
+  const currentWeek = Math.max(1, Math.min(
+    totalWeeks,
+    Math.ceil(elapsedMs / (7 * 24 * 60 * 60 * 1000))
+  ));
+  const progressPct = Math.max(0, Math.min(100, (elapsedMs / totalMs) * 100));
+
+  return { currentWeek, totalWeeks, progressPct };
+}
+
+function formatTodayHeading() {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(new Date());
+}
+
+/* ===========================================
+   UTILITY FORMATTERS
+   =========================================== */
+
+function toDateTimeLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const h = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d}T${h}:${min}`;
+}
+
+function defaultSessionTime() {
+  const next = new Date();
+  next.setHours(next.getHours() + 2, 0, 0, 0);
+  if (next.getHours() > 21) {
+    next.setDate(next.getDate() + 1);
+    next.setHours(10, 0, 0, 0);
+  }
+  return toDateTimeLocal(next);
+}
 
 function formatDate(isoDate) {
   if (!isoDate) return "";
   return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
     month: "short",
     day: "numeric",
   }).format(new Date(`${isoDate}T00:00:00`));
 }
 
-function UrgencyTag({ urgency }) {
-  if (!urgency) return null;
-  return <span className={`tag tag--${urgency.color}`}>{urgency.label}</span>;
+function formatSessionTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
-function TypeTag({ type }) {
-  if (!type || type === "other") return null;
-  return <span className="tag tag--purple">{type.charAt(0).toUpperCase() + type.slice(1)}</span>;
-}
+/* ===========================================
+   COMPONENTS
+   =========================================== */
 
-function DifficultyDots({ value }) {
-  if (!value) return <span className="cell-placeholder">—</span>;
+function SemesterBar({ semester }) {
+  const progress = getSemesterProgress(semester);
+  if (!progress) return null;
+
   return (
-    <div className="dots" aria-label={`Difficulty ${value} of 5`}>
-      {[1, 2, 3, 4, 5].map((dot) => (
-        <span key={dot} className={`dots__dot${dot <= value ? " dots__dot--filled" : ""}`} />
-      ))}
+    <div className="semester-bar" aria-label="Semester progress">
+      <div className="semester-bar__text">
+        <span className="semester-bar__week">
+          Week {progress.currentWeek} of {progress.totalWeeks}
+        </span>
+        <span className="semester-bar__pct">
+          {Math.round(progress.progressPct)}% through
+        </span>
+      </div>
+      <div className="semester-bar__track" aria-hidden="true">
+        <div
+          className="semester-bar__fill"
+          style={{ width: `${progress.progressPct}%` }}
+        />
+      </div>
     </div>
   );
 }
 
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function IconTrash() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
-  );
-}
-
-function TaskModal({ open, onClose, onCreated, onSave, onDelete, courses, semester, taskToEdit }) {
-  const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [courseId, setCourseId] = useState("");
-  const [type, setType] = useState("other");
-  const [difficulty, setDifficulty] = useState(0);
-  const [isLoop, setIsLoop] = useState(false);
-  const [loopDays, setLoopDays] = useState([]);
-  const [loopStart, setLoopStart] = useState("");
-  const [loopEnd, setLoopEnd] = useState("");
-  const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState("active");
-  const [deleteArmed, setDeleteArmed] = useState(false);
-
-  const isEditing = !!taskToEdit;
-  const isMilestoneEdit = !!taskToEdit?.isMilestone;
-
-  function reset() {
-    setTitle(""); setDueDate(""); setCourseId(""); setType("other");
-    setDifficulty(0); setIsLoop(false); setLoopDays([]);
-    setLoopStart(semester?.startDate || ""); setLoopEnd(semester?.endDate || "");
-    setNotes("");
-    setStatus("active");
-    setDeleteArmed(false);
-  }
-
-  useEffect(() => {
-    if (taskToEdit) {
-      setTitle(taskToEdit.isMilestone ? (taskToEdit.milestoneLabel || taskToEdit.title?.replace(/^↳\s*/, "") || "") : (taskToEdit.title || ""));
-      setDueDate(taskToEdit.dueDate || "");
-      setCourseId(taskToEdit.courseId || "");
-      setType(taskToEdit.type || "other");
-      setDifficulty(taskToEdit.difficulty || 0);
-      setIsLoop(!!taskToEdit.recurrence);
-      setLoopDays(taskToEdit.recurrence?.days || []);
-      setLoopStart(taskToEdit.recurrence?.startDate || semester?.startDate || "");
-      setLoopEnd(taskToEdit.recurrence?.endDate || semester?.endDate || "");
-      setNotes(taskToEdit.isMilestone ? (taskToEdit.milestoneWhy || "") : (taskToEdit.notes || ""));
-      setStatus(taskToEdit.status === "done" ? "done" : "active");
-      setDeleteArmed(false);
-    } else {
-      reset();
-    }
-  }, [taskToEdit, open]);
-
-  function toggleDay(day) {
-    setLoopDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
-  }
-
-  async function handleSubmit() {
-    if (!title.trim()) return;
-    if (isMilestoneEdit) {
-      await onSave(taskToEdit, {
-        label: title.trim(),
-        date: dueDate || null,
-        why: notes.trim(),
-        status,
-      });
-      reset();
-      onCreated();
-      onClose();
-      return;
-    }
-
-    const courseEntry = courses.find((c) => c.id === courseId);
-    const courseLabel = courseEntry ? (courseEntry.code || courseEntry.name) : "—";
-
-    const taskData = {
-      title: title.trim(),
-      dueDate: isLoop ? null : (dueDate || null),
-      courseId: courseId || null,
-      courseLabel,
-      type,
-      difficulty: difficulty || null,
-      notes: notes.trim(),
-      status,
-      recurrence: isLoop && loopDays.length > 0 ? {
-        days: loopDays,
-        startDate: loopStart,
-        endDate: loopEnd,
-      } : null,
-    };
-
-    if (isEditing) {
-      await onSave(taskToEdit, taskData);
-    } else {
-      await createTask(taskData);
-    }
-    reset();
-    onCreated();
-    onClose();
-  }
-
-  async function handleDeleteClick() {
-    if (!isEditing || !taskToEdit) return;
-    if (!deleteArmed) {
-      setDeleteArmed(true);
-      return;
-    }
-    await onDelete(taskToEdit);
-    reset();
-    onCreated();
-    onClose();
-  }
-
-  if (!open) return null;
+function TaskCard({ task, onToggle }) {
+  const isDone = task.status === "done";
+  const urgency = getTaskUrgency(task.dueDate, task.status);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal__header">
-          <h2 className="modal__title">{isMilestoneEdit ? "Edit prep step" : isEditing ? "Edit task" : "New task"}</h2>
-          <button className="modal__close" onClick={onClose} aria-label="Close">×</button>
-        </div>
-
-        <div className="modal__body">
-          {isMilestoneEdit && (
-            <div className="modal-context">
-              <span className="modal-context__label">Parent task</span>
-              <span className="modal-context__value">{taskToEdit.parentTitle || "Major task"}</span>
-            </div>
+    <div className={`horizon-card${isDone ? " horizon-card--done" : ""}`}>
+      <input
+        type="checkbox"
+        className="horizon-card__checkbox"
+        checked={isDone}
+        onChange={() => onToggle(task)}
+      />
+      <div className="horizon-card__content">
+        <h4 className="horizon-card__title" title={task.title}>{task.title}</h4>
+        <div className="horizon-card__meta">
+          <span className="horizon-card__course">{task.course || "—"}</span>
+          {!isDone && urgency.color === "red" && (
+            <span className={`tag tag--${urgency.color} horizon-card__urgency`}>
+              {urgency.label}
+            </span>
           )}
-
-          <label className="field">
-            <span className="field__label">{isMilestoneEdit ? "Prep step" : "Title"}</span>
-            <input className="field__input" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Assignment 2, Gym, Office Hours" autoFocus />
-          </label>
-
-          {isMilestoneEdit ? (
-            <div className="setup-form__row">
-              <label className="field">
-                <span className="field__label">Date</span>
-                <input className="field__input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              </label>
-              <label className="field">
-                <span className="field__label">Status</span>
-                <select className="field__input" value={status} onChange={(e) => setStatus(e.target.value)}>
-                  <option value="active">Active</option>
-                  <option value="done">Done</option>
-                </select>
-              </label>
-            </div>
-          ) : (
-            <>
-              <div className="setup-form__row">
-            {courses.length > 0 && (
-              <label className="field">
-                <span className="field__label">Course (optional)</span>
-                <select className="field__input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                  <option value="">None</option>
-                  {courses.map((c) => <option key={c.id} value={c.id}>{c.code || c.name}</option>)}
-                </select>
-              </label>
-            )}
-            <label className="field">
-              <span className="field__label">Type</span>
-              <select className="field__input" value={type} onChange={(e) => setType(e.target.value)}>
-                <option value="other">General</option>
-                <option value="assignment">Assignment</option>
-                <option value="quiz">Quiz</option>
-                <option value="exam">Exam</option>
-                <option value="midterm">Midterm</option>
-                <option value="project">Project</option>
-                <option value="lab">Lab</option>
-                <option value="presentation">Presentation</option>
-                <option value="essay">Essay</option>
-                <option value="reading">Reading</option>
-              </select>
-            </label>
-              </div>
-
-          <label className="field">
-            <span className="field__label">Difficulty</span>
-            <div className="dots dots--input" aria-label="Set difficulty">
-              {[1, 2, 3, 4, 5].map((dot) => (
-                <button
-                  key={dot}
-                  type="button"
-                  className={`dots__dot dots__dot--clickable${dot <= difficulty ? " dots__dot--filled" : ""}`}
-                  onClick={() => setDifficulty(dot === difficulty ? 0 : dot)}
-                  aria-label={`Difficulty ${dot}`}
-                />
-              ))}
-            </div>
-          </label>
-
-          {isEditing && (
-            <label className="field">
-              <span className="field__label">Status</span>
-              <select className="field__input" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="active">Active</option>
-                <option value="done">Done</option>
-              </select>
-            </label>
-          )}
-
-          <label className="field" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <input type="checkbox" checked={isLoop} onChange={(e) => setIsLoop(e.target.checked)} className="horizon-card__checkbox" />
-            <span className="field__label" style={{ margin: 0 }}>Recurring task</span>
-          </label>
-
-          {isLoop ? (
-            <div className="modal__loop-section">
-              <div className="field">
-                <span className="field__label">Repeats on</span>
-                <div className="loop-days">
-                  {DAY_LABELS.map((label, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      className={`loop-day${loopDays.includes(idx) ? " loop-day--active" : ""}`}
-                      onClick={() => toggleDay(idx)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="setup-form__row">
-                <label className="field">
-                  <span className="field__label">From</span>
-                  <input className="field__input" type="date" value={loopStart} onChange={(e) => setLoopStart(e.target.value)} />
-                </label>
-                <label className="field">
-                  <span className="field__label">Until</span>
-                  <input className="field__input" type="date" value={loopEnd} onChange={(e) => setLoopEnd(e.target.value)} />
-                </label>
-              </div>
-            </div>
-          ) : (
-            <label className="field">
-              <span className="field__label">Due date</span>
-              <input className="field__input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </label>
-          )}
-            </>
-          )}
-
-          <label className="field">
-            <span className="field__label">{isMilestoneEdit ? "Why now (optional)" : "Notes (optional)"}</span>
-            <textarea className="field__input field__textarea" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={isMilestoneEdit ? "Why this prep step matters..." : "Any extra context..."} />
-          </label>
-        </div>
-
-        <div className="modal__footer modal__footer--split">
-          <div className="modal__footer-left">
-            {isEditing && (
-              <button className={`modal-delete${deleteArmed ? " modal-delete--armed" : ""}`} type="button" onClick={handleDeleteClick}>
-                <IconTrash /> {deleteArmed ? "Confirm delete" : "Delete"}
-              </button>
-            )}
-          </div>
-          <div className="modal__footer-right">
-            <button className="btn-ghost" type="button" onClick={onClose}>Cancel</button>
-            <button className="btn-primary" type="button" onClick={handleSubmit} disabled={!title.trim()}>
-              {isEditing ? "Save changes" : (isLoop ? "Create recurring task" : "Add task")}
-            </button>
-          </div>
+          <span className="horizon-card__date">{formatDate(task.dueDate)}</span>
         </div>
       </div>
     </div>
   );
 }
 
-/* ===========================================
-   Summary Cards — Dashboard Overview
-   =========================================== */
+function DifficultyMark({ value }) {
+  if (!value) return null;
+  return <span className="difficulty-mark" aria-label={`Difficulty ${value} of 5`}>{value}/5</span>;
+}
 
-function SummaryCard({ label, value, detail, detailClass, accentValue }) {
+function StartNowCard({ task, nextAction, onSaveCommitment }) {
+  const existing = task.startCommitment;
+  const [isEditingCommitment, setIsEditingCommitment] = useState(!existing);
+  const [scheduledAt, setScheduledAt] = useState(existing?.scheduledAt || defaultSessionTime());
+  const [place, setPlace] = useState(existing?.place || "");
+  const [firstStep, setFirstStep] = useState(existing?.firstStep || nextAction.label || "");
+
+  async function handleSave() {
+    await onSaveCommitment(task, { scheduledAt, place, firstStep });
+    setIsEditingCommitment(false);
+  }
+
   return (
-    <div className="summary-card">
-      <div className="summary-card__label">{label}</div>
-      <div className={`summary-card__value${accentValue ? " summary-card__value--accent" : ""}`}>{value}</div>
-      {detail && <div className={`summary-card__detail${detailClass ? ` summary-card__detail--${detailClass}` : ""}`}>{detail}</div>}
+    <div className="start-now-card">
+      <div className="start-now-card__head">
+        <span className="start-now-card__type">{task.type}</span>
+        {task.course && task.course !== "—" && (
+          <span className="cell-course-badge">{task.course}</span>
+        )}
+      </div>
+      <h4 className="start-now-card__title">{task.title}</h4>
+      <div className="start-now-card__action">
+        <span className="start-now-card__action-label">Next action</span>
+        <span className="start-now-card__action-value">{nextAction.label}</span>
+      </div>
+      {nextAction.why && (
+        <p className="start-now-card__why">Start now — {nextAction.why}</p>
+      )}
+      <div className="start-now-card__due">
+        Due {formatDate(task.dueDate)}
+      </div>
+
+      {existing && !isEditingCommitment ? (
+        <div className="start-now-card__commitment">
+          <div>
+            <span className="start-now-card__commitment-label">Planned start</span>
+            <strong>{formatSessionTime(existing.scheduledAt) || "Time not set"}</strong>
+            {(existing.place || existing.firstStep) && (
+              <span>{[existing.place, existing.firstStep].filter(Boolean).join(" · ")}</span>
+            )}
+          </div>
+          <button type="button" className="start-now-card__edit" onClick={() => setIsEditingCommitment(true)}>
+            Change
+          </button>
+        </div>
+      ) : (
+        <div className="start-now-card__commitment-form">
+          <div className="start-now-card__form-row">
+            <label className="start-now-card__field">
+              <span>When</span>
+              <input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} />
+            </label>
+            <label className="start-now-card__field">
+              <span>Where</span>
+              <input type="text" value={place} onChange={(event) => setPlace(event.target.value)} placeholder="Library, desk, cafe" />
+            </label>
+          </div>
+          <label className="start-now-card__field">
+            <span>First move</span>
+            <input type="text" value={firstStep} onChange={(event) => setFirstStep(event.target.value)} placeholder="Open rubric, outline first section" />
+          </label>
+          <div className="start-now-card__form-actions">
+            {existing && (
+              <button type="button" className="btn-ghost" onClick={() => setIsEditingCommitment(false)}>
+                Cancel
+              </button>
+            )}
+            <button type="button" className="btn-primary" onClick={handleSave}>
+              Save start plan
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function TaskLedgerPage() {
+function PlanningBrief({ startNowItems, heavyWeek, buckets, todayHeading }) {
+  const leadItem = startNowItems[0];
+  const dueSoonCount = buckets.Today.length + buckets["This Week"].length;
+  const nextMove = leadItem
+    ? `${leadItem.task.title}: ${leadItem.nextAction.label}`
+    : dueSoonCount > 0
+      ? `${dueSoonCount} item${dueSoonCount !== 1 ? "s" : ""} due this week`
+      : "No urgent academic work today";
+
+  return (
+    <section className="planning-brief" aria-label="Today planning brief">
+      <div className="planning-brief__main">
+        <span className="planning-brief__eyebrow">{todayHeading}</span>
+        <h2 className="planning-brief__title">{nextMove}</h2>
+        <p className="planning-brief__copy">
+          Commit to one start session before reacting to the rest of the list.
+        </p>
+      </div>
+      <div className="planning-brief__stats" aria-label="Planning totals">
+        <div>
+          <strong>{startNowItems.length}</strong>
+          <span>Start now</span>
+        </div>
+        <div>
+          <strong>{dueSoonCount}</strong>
+          <span>Due soon</span>
+        </div>
+        <div>
+          <strong>{heavyWeek?.count || 0}</strong>
+          <span>Heavy items</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HeavyWeekCard({ signal }) {
+  if (!signal) return null;
+
+  const suggestion = signal.suggestionTask;
+  const actionText = signal.suggestionAction?.label;
+
+  return (
+    <section className="heavy-week-card" aria-label="Heavy week ahead">
+      <div className="heavy-week-card__copy">
+        <span className="heavy-week-card__eyebrow">Heavy week ahead</span>
+        <h2 className="heavy-week-card__title">
+          {signal.count} major item{signal.count !== 1 ? "s" : ""} in {signal.windowLabel}
+        </h2>
+        {suggestion && (
+          <p className="heavy-week-card__suggestion">
+            Consider starting <strong>{suggestion.title}</strong>{actionText ? `: ${actionText}` : ""}.
+          </p>
+        )}
+      </div>
+      <div className="heavy-week-card__list">
+        {signal.items.map((task) => (
+          <div key={task.id} className="heavy-week-card__item">
+            <div>
+              <span className="heavy-week-card__item-title">{task.title}</span>
+              <span className="heavy-week-card__item-date">{formatDate(task.dueDate)}</span>
+            </div>
+            <DifficultyMark value={task.difficulty} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BucketColumn({ title, tasks, onToggle }) {
+  return (
+    <div className="horizon-bucket">
+      <div className="horizon-bucket__header">
+        <h3 className="horizon-bucket__title">{title}</h3>
+        <span className="horizon-bucket__count">{tasks.length}</span>
+      </div>
+      <div className="horizon-bucket__list">
+        {tasks.length > 0 ? (
+          tasks.map((task) => (
+            <TaskCard key={task.id} task={task} onToggle={onToggle} />
+          ))
+        ) : (
+          <p className="horizon-bucket__empty">
+            Nothing here
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===========================================
+   PAGE
+   =========================================== */
+
+export default function WhatMattersPage() {
   const [tasks, setTasks] = useState([]);
   const [parentTasks, setParentTasks] = useState([]);
-  const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [taskToEdit, setTaskToEdit] = useState(null);
-  const [filter, setFilter] = useState("all"); // 'all' | 'syllabus' | 'personal'
-
-  const { courses, semester } = useMemo(() => readSetup(), []);
+  const { semester } = useMemo(() => readSetup(), []);
 
   const loadTasks = useCallback(async () => {
-    const [data, parents, records] = await Promise.all([
+    const [allData, parentData] = await Promise.all([
       getAllSemesterTasks(),
       getParentTasks(),
-      listSyllabusRecords(),
     ]);
-    setTasks(data);
-    setParentTasks(parents);
-
-    // Count unreviewed items
-    let pending = 0;
-    for (const record of records) {
-      for (const item of record.reviewItems || []) {
-        if (item.status === "pending") pending++;
-      }
-    }
-    setReviewCount(pending);
-
+    setTasks(allData);
+    setParentTasks(parentData);
     setLoading(false);
   }, []);
 
@@ -378,339 +359,110 @@ export default function TaskLedgerPage() {
     loadTasks();
   }
 
-  async function handleSaveTask(task, taskData) {
-    if (task.isMilestone && task.parentTaskId && task.milestoneId) {
-      await updateMilestone(task.parentTaskId, task.milestoneId, taskData);
-      return;
-    }
-
-    if (task.source === "syllabus" && task.recordId && task.taskId) {
-      await patchSyllabusRecord(task.recordId, (record) => ({
-        ...record,
-        reviewItems: (record.reviewItems || []).map((item) => {
-          if (item.id !== task.taskId) return item;
-
-          const nextType = taskData.type || "other";
-          const nextDueDate = taskData.dueDate;
-          const nextDifficulty = taskData.difficulty ?? null;
-          const shouldRefreshPlan =
-            nextType !== item.type ||
-            nextDueDate !== item.dueDateRaw ||
-            nextDifficulty !== (item.difficulty ?? null);
-
-          let milestones = item.milestones || null;
-          let startByDate = item.startByDate || null;
-          let milestonesCustomized = item.milestonesCustomized || false;
-
-          if (shouldRefreshPlan) {
-            if (shouldRegenerateStartPlan(item)) {
-              const regen = generateMilestones({
-                type: nextType,
-                dueDate: nextDueDate,
-                difficulty: nextDifficulty,
-              }, semester?.startDate);
-              milestones = regen.milestones.length > 0 ? regen.milestones : null;
-              startByDate = regen.startByDate;
-              milestonesCustomized = false;
-            } else {
-              startByDate = getStartByDateFromMilestones(milestones);
-              milestonesCustomized = true;
-            }
-          }
-
-          return {
-            ...item,
-            title: taskData.title,
-            type: nextType,
-            dueDateRaw: nextDueDate,
-            difficulty: nextDifficulty,
-            notes: taskData.notes ?? item.notes ?? "",
-            status: taskData.status === "done" ? "done" : "approved",
-            milestones,
-            startByDate,
-            milestonesCustomized,
-          };
-        }),
-      }));
-      return;
-    }
-
-    await updateTask(task.id, taskData);
+  async function handleSaveCommitment(task, commitment) {
+    await saveStartCommitment(task, commitment);
+    loadTasks();
   }
 
-  async function handleDeleteTask(task) {
-    if (task.isMilestone && task.parentTaskId && task.milestoneId) {
-      await deleteMilestone(task.parentTaskId, task.milestoneId);
-      return;
-    }
-
-    if (task.source === "syllabus" && task.recordId && task.taskId) {
-      await patchSyllabusRecord(task.recordId, (record) => ({
-        ...record,
-        reviewItems: (record.reviewItems || []).map((item) =>
-          item.id === task.taskId ? { ...item, status: "rejected" } : item
-        ),
-      }));
-      return;
-    }
-
-    await removeTask(task.id);
-  }
-
-  function resolveEditableTask(task) {
-    if (task.isMilestone) {
-      return task;
-    }
-    if (task.isOccurrence && task.parentId) {
-      return parentTasks.find((parent) => parent.id === task.parentId) || task;
-    }
-    return task;
-  }
-
-  function handleOpenTask(task) {
-    const editableTask = resolveEditableTask(task);
-    setTaskToEdit(editableTask);
-    setModalOpen(true);
-  }
-
-  function handleCloseModal() {
-    setModalOpen(false);
-    setTaskToEdit(null);
-  }
-
-  // Derive summary data
-  const summary = useMemo(() => {
-    const active = tasks.filter((t) => t.status !== "done" && !t.isMilestone);
-    const today = active.filter((t) => getTaskBucket(t.dueDate, t.status) === "Today").length;
-    const thisWeek = active.filter((t) => {
-      const bucket = getTaskBucket(t.dueDate, t.status);
-      return bucket === "Today" || bucket === "This Week" || bucket === "Overdue";
-    }).length;
-
-    const heavy = active.filter((t) => (t.difficulty ?? 0) >= 4).length;
-
-    // Upcoming exam
-    const examTypes = new Set(["exam", "midterm", "final", "quiz"]);
-    const upcomingExam = active.find((t) => examTypes.has(t.type));
-
-    // Start now count
-    let startNow = 0;
-    for (const task of parentTasks) {
-      if (task.status === "done" || !task.milestones) continue;
-      if (!isPrepWindowOpen(task)) continue;
-      const action = getNextAction(task);
-      if (action && action.active) startNow++;
-    }
-
-    return { today, thisWeek, upcomingExam, startNow, heavy };
-  }, [tasks, parentTasks]);
-
-  const filteredTasks = useMemo(() => {
-    if (filter === "syllabus") {
-      return tasks.filter((t) => 
-        t.source === "syllabus" || 
-        (t.isMilestone && t.parentTaskId?.startsWith("syl::"))
-      );
-    }
-    if (filter === "personal") {
-      return tasks.filter((t) => 
-        t.source === "manual" || 
-        t.source === "recurring-instance" ||
-        (t.isMilestone && !t.parentTaskId?.startsWith("syl::"))
-      );
-    }
-    return tasks;
-  }, [tasks, filter]);
-
-  const activeCount = tasks.filter((t) => t.status !== "done").length;
+  const todayHeading = useMemo(() => formatTodayHeading(), []);
 
   if (loading) {
     return (
       <>
-        <header className="page-header">
-          <h1 className="page-title">Task Ledger</h1>
-        </header>
-        <div className="database-view">
+        <header className="page-header"><h1 className="page-title">What Matters</h1></header>
+        <div className="horizon-board">
           <p className="cell-placeholder" style={{ padding: 40 }}>Loading...</p>
         </div>
       </>
     );
   }
 
+  // Derive "Start Now" items: parent tasks with open prep windows and an active next action
+  const startNowItems = [];
+  for (const task of parentTasks) {
+    if (task.status === "done" || !task.milestones) continue;
+    if (!isPrepWindowOpen(task)) continue;
+    const action = getNextAction(task);
+    if (action && action.active) {
+      startNowItems.push({ task, nextAction: action });
+    }
+  }
+  startNowItems.sort((a, b) => getEffortPriorityScore(b.task) - getEffortPriorityScore(a.task));
+
+  const heavyWeek = getHeavyWeekSignal(parentTasks);
+
+  // Standard buckets from all tasks (excluding milestone rows for cleaner display)
+  const buckets = { Overdue: [], Today: [], "This Week": [], "Next Week": [] };
+  for (const task of tasks) {
+    if (task.status === "done" || task.isMilestone) continue;
+    const bucket = getTaskBucket(task.dueDate, task.status);
+    if (bucket !== "Done" && bucket !== "Later" && buckets[bucket]) {
+      buckets[bucket].push(task);
+    }
+  }
+  for (const key of Object.keys(buckets)) {
+    buckets[key] = sortByEffortPriority(buckets[key]);
+  }
+
   return (
     <>
-      <header className="page-header">
-        <h1 className="page-title">Task Ledger</h1>
-        <button
-          className="btn-primary"
-          type="button"
-          onClick={() => {
-            setTaskToEdit(null);
-            setModalOpen(true);
-          }}
-        >
-          + New task
-        </button>
+      <header className="page-header page-header--planning">
+        <div>
+          <h1 className="page-title">What Matters</h1>
+          <p className="page-subtitle">Your planning surface for deadlines, start windows, and the next real move.</p>
+        </div>
       </header>
 
-      {/* Dashboard summary cards */}
-      <div className="dashboard-summary">
-        <SummaryCard
-          label="Today"
-          value={summary.today}
-          detail={summary.today === 0 ? "Nothing due today" : `${summary.today} task${summary.today !== 1 ? "s" : ""} due`}
-          detailClass={summary.today > 0 ? "urgent" : "safe"}
-        />
-        <SummaryCard
-          label="What Matters"
-          value={summary.thisWeek}
-          detail="Active this week"
-        />
-        <SummaryCard
-          label="Upcoming Exams"
-          value={summary.upcomingExam ? formatDate(summary.upcomingExam.dueDate) : "—"}
-          detail={summary.upcomingExam ? summary.upcomingExam.title : "No exams coming up"}
-          accentValue={!!summary.upcomingExam}
-        />
-        <SummaryCard
-          label="Start Now"
-          value={summary.startNow}
-          detail="Tasks with open prep windows"
-          detailClass={summary.startNow > 0 ? "urgent" : undefined}
-        />
-        <SummaryCard
-          label="Review Needed"
-          value={reviewCount}
-          detail={reviewCount === 0 ? "All caught up" : `${reviewCount} item${reviewCount !== 1 ? "s" : ""} awaiting review`}
-          detailClass={reviewCount > 0 ? "urgent" : "safe"}
-        />
-        <SummaryCard
-          label="Heavy"
-          value={summary.heavy}
-          detail="Tasks with difficulty ≥ 4"
-        />
-      </div>
+      <div className="what-matters-page">
+        <SemesterBar semester={semester} />
 
-      <div className="database-view">
-        <div className="database-toolbar">
-          <div className="database-toolbar__left">
-            <div className="filter-tabs">
-              <button 
-                className={`filter-tab${filter === "all" ? " filter-tab--active" : ""}`}
-                onClick={() => setFilter("all")}
-              >
-                All
-              </button>
-              <button 
-                className={`filter-tab${filter === "syllabus" ? " filter-tab--active" : ""}`}
-                onClick={() => setFilter("syllabus")}
-              >
-                Syllabus
-              </button>
-              <button 
-                className={`filter-tab${filter === "personal" ? " filter-tab--active" : ""}`}
-                onClick={() => setFilter("personal")}
-              >
-                Personal
-              </button>
-            </div>
-            <span className="database-toolbar__count">· {filteredTasks.filter(t => t.status !== 'done').length} active</span>
-          </div>
+        <PlanningBrief
+          startNowItems={startNowItems}
+          heavyWeek={heavyWeek}
+          buckets={buckets}
+          todayHeading={todayHeading}
+        />
+
+        <div className="what-matters-top-grid">
+          {startNowItems.length > 0 ? (
+            <section className="start-now-section">
+              <div className="start-now-section__header">
+                <h2 className="start-now-section__title">Start now</h2>
+                <span className="start-now-section__subtitle">Major tasks with open preparation windows</span>
+              </div>
+              <div className="start-now-section__grid">
+                {startNowItems.map(({ task, nextAction }) => (
+                  <StartNowCard key={task.id} task={task} nextAction={nextAction} onSaveCommitment={handleSaveCommitment} />
+                ))}
+              </div>
+            </section>
+          ) : (
+            <section className="start-now-section start-now-section--empty">
+              <div className="start-now-section__header">
+                <h2 className="start-now-section__title">Start now</h2>
+              </div>
+              <p className="start-now-section__empty">No major prep windows are open right now.</p>
+            </section>
+          )}
+
+          <HeavyWeekCard signal={heavyWeek} />
         </div>
 
-        {tasks.length === 0 ? (
-          <div className="upload-panel__section" style={{ marginTop: 12 }}>
-            <p className="upload-panel__empty">
-              No tasks yet. Upload a syllabus and approve extracted tasks, or add tasks manually.
-            </p>
+        <section className="due-soon-section">
+          <div className="due-soon-section__header">
+            <h2 className="start-now-section__title">Due soon</h2>
+            <span className="start-now-section__subtitle">Sorted by effort-aware urgency</span>
           </div>
-        ) : (
-          <div className="db-table-wrap">
-            <table className="db-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}></th>
-                  <th>Task</th>
-                  <th style={{ width: 90 }}>Due</th>
-                  <th style={{ width: 90 }}>Start by</th>
-                  <th style={{ width: 100 }}>Type</th>
-                  <th style={{ width: 110 }}>Difficulty</th>
-                  <th style={{ width: 120 }}>Urgency</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.map((task) => {
-                  const isDone = task.status === "done";
-                  const urgency = getTaskUrgency(task.dueDate, task.status);
-                  const isMilestone = task.isMilestone;
-
-                  return (
-                    <tr
-                      key={task.id}
-                      className={`db-table-row--clickable${isDone ? " db-table-row--done" : ""}${isMilestone ? " db-table-row--milestone" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleOpenTask(task)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          handleOpenTask(task);
-                        }
-                      }}
-                    >
-                      <td
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          className="horizon-card__checkbox"
-                          checked={isDone}
-                          onChange={(event) => {
-                            event.stopPropagation();
-                            handleToggle(task);
-                          }}
-                          style={{ margin: 0 }}
-                        />
-                      </td>
-                      <td>
-                        <div className="cell-task-wrapper">
-                          <span className={`cell-task${isMilestone ? " cell-task--milestone" : ""}`} title={task.title}>
-                            {task.title}
-                          </span>
-                          {task.isOccurrence && <span className="tag tag--gray" style={{ fontSize: 10 }}>recurring</span>}
-                          {task.course && task.course !== "—" && !isMilestone && (
-                            <span className="cell-course-badge">{task.course}</span>
-                          )}
-                          {isMilestone && task.milestoneWhy && (
-                            <span className="cell-why-hint">{task.milestoneWhy}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="cell-date">{formatDate(task.dueDate)}</td>
-                      <td className="cell-date cell-date--start">{!isMilestone && task.startByDate ? formatDate(task.startByDate) : ""}</td>
-                      <td>{!isMilestone && <TypeTag type={task.type} />}</td>
-                      <td><DifficultyDots value={task.difficulty} /></td>
-                      <td><UrgencyTag urgency={urgency} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="horizon-board">
+            {buckets.Overdue.length > 0 && (
+              <BucketColumn title="Overdue" tasks={buckets.Overdue} onToggle={handleToggle} />
+            )}
+            <BucketColumn title="Today" tasks={buckets.Today} onToggle={handleToggle} />
+            <BucketColumn title="This Week" tasks={buckets["This Week"]} onToggle={handleToggle} />
+            <BucketColumn title="Next Week" tasks={buckets["Next Week"]} onToggle={handleToggle} />
           </div>
-        )}
+        </section>
       </div>
-
-      <TaskModal
-        open={modalOpen}
-        onClose={handleCloseModal}
-        onCreated={loadTasks}
-        onSave={handleSaveTask}
-        onDelete={handleDeleteTask}
-        courses={courses}
-        semester={semester}
-        taskToEdit={taskToEdit}
-      />
     </>
   );
 }

@@ -117,15 +117,15 @@ const navSections = [
   {
     label: "Execution",
     items: [
-      { label: "What Matters", href: "/dashboard/thisweek", icon: IconFocus },
+      { label: "What Matters", href: "/dashboard", icon: IconFocus },
     ],
   },
   {
     label: "Planning",
     items: [
-      { label: "Task Ledger", href: "/dashboard", icon: IconLedger },
+      { label: "Task Ledger", href: "/dashboard/ledger", icon: IconLedger },
       { label: "Calendar", href: "/dashboard/calendar", icon: IconCalendar },
-      { label: "Forecast", href: "/dashboard/forecast", icon: IconChart },
+      { label: "Semester Forecast", href: "/dashboard/forecast", icon: IconChart },
     ],
   },
   {
@@ -137,9 +137,9 @@ const navSections = [
 ];
 
 const pageNames = {
-  "/dashboard": "Task Ledger",
-  "/dashboard/thisweek": "What Matters",
-  "/dashboard/forecast": "Workload Forecast",
+  "/dashboard": "What Matters",
+  "/dashboard/ledger": "Task Ledger",
+  "/dashboard/forecast": "Semester Forecast",
   "/dashboard/calendar": "Calendar",
   "/dashboard/sources": "Syllabus Lab",
   "/dashboard/review": "Verification Queue",
